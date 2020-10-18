@@ -29,8 +29,15 @@ void f(PendingOperationsQueue &poq, std::shared_ptr<WatchedDirectory> const &wd_
 
 int main(int argc, char *argv[]) {
     if (argc < 2) return -1;
+    boost::filesystem::path path_to_watch {argv[1]};
+//    int i = status(path_to_watch).permissions() & 0x0600 (6 << 6);
+    if (!exists(path_to_watch) || !is_directory(path_to_watch)) {
+        std::cerr << "P provided doesn't exist or is not a directory";
+        return -2;
+    }
+
     // check input folder existance
-    // check
+
     std::shared_ptr<WatchedDirectory> wd_ptr = WatchedDirectory::get_instance(argv[1]);
     FileWatcher fw{wd_ptr, std::chrono::seconds(5)};
     PendingOperationsQueue poq{};

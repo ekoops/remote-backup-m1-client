@@ -8,7 +8,6 @@
 #include <boost/filesystem.hpp>
 #include <map>
 #include <string>
-#include <condition_variable>
 #include <algorithm>
 #include <functional>
 
@@ -17,9 +16,8 @@ class WatchedDirectory {
     boost::filesystem::path dir_path;
     std::map<boost::filesystem::path, std::string> dir_content; // {percorso_del_file, hash_del_file}
     //TODO implementarla tramite std::unordered_map
-
-    std::condition_variable cv;
     std::mutex m;
+
     WatchedDirectory(boost::filesystem::path dir_path) : dir_path{std::move(dir_path)} {}
 public:
 
