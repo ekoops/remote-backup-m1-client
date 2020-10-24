@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.17)
 project(remote-backup-m1-client)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS -pthread)
 #[[set(Boost_USE_STATIC_LIBS ON)]]
 #[[set(OPENSSL_USE_STATIC_LIBS TRUE)]]
 

@@ -16,10 +16,17 @@ class Operation {
     OPERATION_TYPE type;
     boost::filesystem::path path;
 public:
-    Operation(OPERATION_TYPE type, boost::filesystem::path path) : type{type}, path{std::move(path)} {}
-    OPERATION_TYPE get_type() const {return this->type;}
-    boost::filesystem::path get_path() const {return this->path;}
+    Operation(OPERATION_TYPE type, boost::filesystem::path path);
+
+    OPERATION_TYPE get_type() const;
+    boost::filesystem::path get_path() const;
+
+    bool operator==(Operation const& other) const;
+    struct OperationHashFunction {
+        size_t operator()(const Operation& operation) const;
+    };
 };
+
 
 
 #endif //PROVA_OPERATION_H
