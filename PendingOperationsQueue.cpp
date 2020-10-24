@@ -8,7 +8,7 @@ bool PendingOperationsQueue::contains(Operation const& operation) {
     return this->operations_set.find(operation) != operations_set.end();
 }
 
-void PendingOperationsQueue::insert(Operation const& operation) {
+void PendingOperationsQueue::insert(Operation&& operation) {
     std::unique_lock ul {m};
     //TODO devo controllare la presenza dell'operazione anche nel Worker thread
     if (!this->contains(operation)) {

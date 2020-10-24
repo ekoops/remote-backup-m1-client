@@ -4,12 +4,14 @@
 
 #include "FileWatcher.h"
 
-FileWatcher::FileWatcher(std::shared_ptr<WatchedDirectory> watched_directory, std::chrono::milliseconds delay)
-: delay{delay}, watched_directory{watched_directory} {
-for (auto &de : boost::filesystem::recursive_directory_iterator(watched_directory->get_dir_path())) {
-watched_directory->insert(de.path());
-}
-//richiedere al server modello_filesystem e generare operazioni iniziali
+using namespace boost::filesystem;
+
+FileWatcher::FileWatcher(std::shared_ptr<LockedDirectory> watched_directory, std::chrono::milliseconds delay)
+        : delay{delay}, watched_directory{watched_directory} {
+    for (auto &de : recursive_directory_iterator(watched_directory->get_dir_path())) {
+        watched_directory->insert(de.path());
+    }
+    //richiedere al server modello_filesystem e generare operazioni iniziali
 
 }
 
@@ -22,7 +24,7 @@ void FileWatcher::start(PendingOperationsQueue &pendingOperationsQueue) {
 
         this->watched_directory->for_each_if(
                 [](path const &p) { return !exists(p); },
-                [&pendingOperationsQueue](std::pair<boost::filesystem::path, std::string> const &pair) {
+                [&pendingOperationsQueue](std::pair<boost::filesystem::path, Metadata> const &pair) {
                     Operation op{OPERATION_TYPE::DELETE, pair.first};
                     pendingOperationsQueue.insert(std::move(op));
                 });
