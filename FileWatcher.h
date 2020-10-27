@@ -20,21 +20,14 @@
 class FileWatcher {
     std::chrono::milliseconds delay;
     std::shared_ptr<LockedDirectory> watched_directory;
+    std::shared_ptr<PendingOperationsQueue> poq;
     bool running_ = true;
 public:
-    FileWatcher(std::shared_ptr<LockedDirectory> watched_directory, std::chrono::milliseconds delay);
-    void start(PendingOperationsQueue &pendingOperationsQueue);
-    void sync_watched_directory() {
-        boost::filesystem::path path_from_server;
-        Directory server_directory {path_from_server};
-        for (auto& de : server_directory.get_dir_content()) {
-            std::pair<bool, bool> results = this->watched_directory->contains(de.first);
-            if ()
-        }
-        //get server directory
-//        Directory server_directory;
-//        watched_directory
-    }
+    FileWatcher(std::shared_ptr<LockedDirectory> watched_directory,
+                std::shared_ptr<PendingOperationsQueue> poq,
+                std::chrono::milliseconds delay);
+    void sync_watched_directory();
+    void start();
 };
 
 

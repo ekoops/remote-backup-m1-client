@@ -18,7 +18,9 @@ class Metadata {
     size_t hash;
 public:
     Metadata(boost::filesystem::path const& path);
+    Metadata(boost::filesystem::path  path, TYPE type, uintmax_t size, size_t hash);
     static size_t create_hash(boost::filesystem::path const& path);
+    bool operator!=(Metadata const& other) const;
 };
 
 

@@ -4,6 +4,9 @@
 
 #include "LockedDirectory.h"
 
+LockedDirectory::LockedDirectory(boost::filesystem::path dir_path): Directory {std::move(dir_path)} {}
+
+
 std::shared_ptr<LockedDirectory> LockedDirectory::get_instance(boost::filesystem::path dir_path) {
     return std::shared_ptr<LockedDirectory>(new LockedDirectory {std::move(dir_path)});
 }
@@ -22,17 +25,17 @@ bool LockedDirectory::update(boost::filesystem::path const& path, Metadata metad
     std::unique_lock ul{m};
     return Directory::update(path, std::move(metadata));
 }
-
-std::pair<bool, bool> LockedDirectory::contains(const boost::filesystem::path &path) {
+bool LockedDirectory::contains(boost::filesystem::path const& path) const {
     std::unique_lock ul{m};
-    auto it = Directory::get_dir_content().find(path);
-    if (it == Directory::get_dir_content().end()) return {false, false};
-    else if (it->second != "hash(path)") return {true, true};
-    else return {true, false};
+    return Directory::contains(path);
+}
+std::pair<bool, bool> LockedDirectory::contains_and_match(boost::filesystem::path const& path, Metadata const& metadata) const {
+    std::unique_lock ul{m};
+    return Directory::contains_and_match(path, metadata);
 }
 
 void LockedDirectory::for_each_if(std::function<bool(boost::filesystem::path const &)> const &pred,
-                            std::function<void(std::pair<boost::filesystem::path, Metadata>)> const &action) {
+                            std::function<void(std::pair<boost::filesystem::path, Metadata> const&)> const &action) const {
     std::unique_lock ul{m};
     Directory::for_each_if(pred, action);
 }

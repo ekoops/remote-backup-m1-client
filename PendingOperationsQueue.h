@@ -12,15 +12,19 @@
 #include "Operation.h"
 
 class PendingOperationsQueue {
-    std::queue<Operation> operations_queue;
-    std::unordered_set<Operation> operations_set;
+    std::queue<std::shared_ptr<Operation>> operations_queue;
+    std::unordered_set<std::shared_ptr<Operation>> operations_set;
+    std::shared_ptr<Operation> pending_op;
     std::condition_variable cv;
+    std::condition_variable leonardo;
     std::mutex m;
 
-    bool contains(Operation const& operation);
+    bool contains(std::shared_ptr<Operation> op_ptr);
+    PendingOperationsQueue() = default;
 public:
-    void insert(Operation&& operation);
-    Operation next_op();
+    static std::shared_ptr<PendingOperationsQueue> get_instance();
+    void push(std::shared_ptr<Operation> op_ptr);
+    std::shared_ptr<Operation> pop();
 };
 
 

@@ -4,7 +4,17 @@
 
 #include "Metadata.h"
 
+#include <utility>
+
 using namespace boost::filesystem;
+
+Metadata::Metadata(boost::filesystem::path path, TYPE type, uintmax_t size, size_t hash)
+    : path {std::move(path)}
+    , type {type}
+    , size {size}
+    , hash {hash}{
+
+}
 
 Metadata::Metadata(boost::filesystem::path const& path)
     : path {path}
@@ -14,5 +24,10 @@ Metadata::Metadata(boost::filesystem::path const& path)
     {}
 
 size_t Metadata::create_hash(const boost::filesystem::path &path) {
+    //TODO
     return 1;
+}
+
+bool Metadata::operator!=(Metadata const& other) const {
+    return this->hash != other.hash
 }
