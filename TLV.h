@@ -8,16 +8,31 @@
 
 #include <cstdint>
 #include <vector>
+#include <map>
+#include <sstream>
+
+enum TLV_TYPE {
+    USRN, PSWD, PATH, END
+};
+
 
 struct TLV {
     uint8_t type;
     uint32_t length;
     std::vector<uint8_t> value;
-
-    TLV(uint8_t type, uint32_t length, char* data): type {type}, length {length} {
-        for (int i=0; i<length; i++) {
-            value.push_back(data[i]);
+    static std::map<TLV_TYPE, uint8_t> types;
+    TLV(uint8_t type,  uint32_t length, char const* data);
+    std::vector<uint8_t> serialize() {
+        std::vector<uint8_t> ser_tlv;
+        ser_tlv.reserve(5 + value.size());
+        ser_tlv.push_back(type);
+        for (int i=0; i<4; i++) {
+            ser_tlv.push_back((length >> (3-i)*8)&0xFF);
         }
+        for (auto& raw : value) {
+            ser_tlv.push_back(raw);
+        }
+        return ser_tlv;
     }
 };
 

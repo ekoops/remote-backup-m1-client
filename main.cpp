@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include "FileWatcher.h"
 #include "LockedDirectory.h"
+#include "Operation2.h"
 
 #define WRITE_MASK 4 << 6
 #define DELAY_MS 5000
@@ -18,19 +19,19 @@ void op_handler(boost::asio::ip::tcp::socket &socket, std::shared_ptr<PendingOpe
                 std::shared_ptr<LockedDirectory> const &ld) {
 
 }
-void add_TLV(char buffer[], size_t pos, )
+
 // AUTH USER LENGTH VALUE_USERNAME PASSWD LENGTH VALUE_PASSWORD TYPE_STOP
 bool authenticate(boost::asio::ip::tcp::socket &socket) {
     std::string username, password;
     int attempts = 0;
 
     std::cout << "Insert your username:" << std::endl;
-    boost::regex username_regex {"[a-z][a-z\\d_\\.]{7, 15}"};
-    boost::regex password_regex {"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
+    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
+    boost::regex password_regex{"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
     while (!(std::cin >> username) || !boost::regex_match(username, username_regex)) {
         std::cin.clear();
         attempts++;
-        std::cout << "Failed to get username. Try again (attempts left " << 3-attempts << ")." << std::endl;
+        std::cout << "Failed to get username. Try again (attempts left " << 3 - attempts << ")." << std::endl;
         if (attempts == 3) return false;
     }
     attempts = 0;
@@ -38,32 +39,43 @@ bool authenticate(boost::asio::ip::tcp::socket &socket) {
     while (!(std::cin >> password) || !boost::regex_match(password, password_regex)) {
         std::cin.clear();
         attempts++;
-        std::cout << "Failed to get password. Try again (attempts left " << 3-attempts << ")." << std::endl;
+        std::cout << "Failed to get password. Try again (attempts left " << 3 - attempts << ")." << std::endl;
         if (attempts == 3) return false;
     }
-    boost::array<char, 128> buffer;
+    Operation2 op2 {OPERATION_TYPE::AUTH};
+    op2.add_TLV(TLV_TYPE::USRN, username.size(), username.c_str());
+    op2.add_TLV(TLV_TYPE::PSWD, password.size(), password.c_str());
+//    boost::array<char, 128> buffer;
+//    buffer[0] = 'a';
+//    buffer[1] = 'b';
+    boost::system::error_code error;
+    std::cout << op2.raw_op.size() << std::endl;
+    std::string s {op2.raw_op.begin(), op2.raw_op.end()};
+    std::cout << s << std::endl;
+    socket.write_some(boost::asio::buffer(op2.raw_op), error);
+
 //    buffer[0] = '5'; // AUTH
 //    buffer[1] = '0'; // USR
-    int max_length = 4;
-    int pos = 2;
-
-    sprintf(buffer.data(), "50%04lu%s1%04lu%s",
-            username.length(),
-            username.c_str(),
-            password.length(),
-            password.c_str()
-            );
-    std::cout << buffer.data() << std::endl;
-    /*for (int i=0; i<max_length; i++) {
-        buffer[pos + i] = (length >> (max_length-1-i)*8)&0xFF;
-    }*/
-
-    boost::system::error_code error;
-    size_t len = socket.write_some(boost::asio::buffer(buffer), error);
-    if (error || len-1 != strlen(buffer.data())) {
-        std::cerr << "Failed to communicate with server." << std::endl;
-        return false;
-    }
+//    int max_length = 4;
+//    int pos = 2;
+//
+//    sprintf(buffer.data(), "50%04lu%s1%04lu%s",
+//            username.length(),
+//            username.c_str(),
+//            password.length(),
+//            password.c_str()
+//            );
+//    std::cout << buffer.data() << std::endl;
+//    /*for (int i=0; i<max_length; i++) {
+//        buffer[pos + i] = (length >> (max_length-1-i)*8)&0xFF;
+//    }*/
+//
+//    boost::system::error_code error;
+//    size_t len = socket.write_some(boost::asio::buffer(buffer), error);
+//    if (error) {
+//        std::cerr << "Failed to communicate with server." << std::endl;
+//        return false;
+//    }
     return true;
 
 //            else if (error) throw boost::system::system_error(error);

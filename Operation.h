@@ -12,22 +12,31 @@
 enum OPERATION_TYPE {
     CREATE, UPDATE, DELETE, SYNC, AUTH
 };
-
 class Operation {
     OPERATION_TYPE type;
-    std::vector<TLV> tlv_chain;
     boost::filesystem::path path;
+    Operation(OPERATION_TYPE type);
     Operation(OPERATION_TYPE type, boost::filesystem::path path);
 public:
-    static std::shared_ptr<Operation> get_instance(OPERATION_TYPE type, boost::filesystem::path path) {
-        return std::shared_ptr<Operation>(new Operation {type, std::move(path)});
+    std::vector<TLV> tlv_chain;
+
+    static std::shared_ptr<Operation> get_instance(OPERATION_TYPE type) {
+        return std::shared_ptr<Operation>(new Operation {type});
     }
+//    static std::shared_ptr<Operation> get_instance(OPERATION_TYPE type, boost::filesystem::path path) {
+//        return std::shared_ptr<Operation>(new Operation {type, std::move(path)});
+//    }
     bool operator==(Operation const& other) const {
         return this->get_type() == other.get_type() &&
                       this->get_path() == other.get_path();
     }
     OPERATION_TYPE get_type() const;
+    uint8_t serialize_type() const {
+        return static_cast<uint8_t>(this->get_type());
+    }
     boost::filesystem::path get_path() const;
+    void add_TLV(TLV_TYPE type, size_t length, char const *buffer);
+
 };
 
 namespace std {

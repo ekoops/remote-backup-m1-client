@@ -24,16 +24,22 @@ void FileWatcher::sync_watched_directory() {
         std::pair<bool, bool> pair = this->watched_directory->contains_and_match(de.first, de.second);
         // if doesn't exist
         if (!pair.first) {
-            this->poq->push(Operation::get_instance(OPERATION_TYPE::DELETE, de.first));
+            auto op = Operation::get_instance(OPERATION_TYPE::DELETE);
+            op->add_TLV(TLV_TYPE::PATH, sizeof(de.first.generic_path()), de.first.generic_path().c_str());
+            this->poq->push(op);
             // if updated
         } else if (pair.second) {
-            this->poq->push(Operation::get_instance(OPERATION_TYPE::UPDATE, de.first));
+            auto op = Operation::get_instance(OPERATION_TYPE::UPDATE);
+            op->add_TLV(TLV_TYPE::PATH, sizeof(de.first.generic_path()), de.first.generic_path().c_str());
+            this->poq->push(op);
         }
     }
     this->watched_directory->for_each_if([&server_directory](boost::filesystem::path const &path) {
         return !server_directory.contains(path);
     }, [this](std::pair<boost::filesystem::path, Metadata> const &pair) {
-        this->poq->push(Operation::get_instance(OPERATION_TYPE::CREATE, pair.first));
+        auto op = Operation::get_instance(OPERATION_TYPE::CREATE);
+        op->add_TLV(TLV_TYPE::PATH, sizeof(pair.first.generic_path()), pair.first.generic_path().c_str());
+        this->poq->push(op);
     });
 }
 
@@ -46,7 +52,9 @@ void FileWatcher::start() {
         this->watched_directory->for_each_if([](path const &p) {
             return !exists(p);
         }, [this](std::pair<boost::filesystem::path, Metadata> const &pair) {
-            this->poq->push(Operation::get_instance(OPERATION_TYPE::DELETE, pair.first));
+            auto op = Operation::get_instance(OPERATION_TYPE::DELETE);
+            op->add_TLV(TLV_TYPE::PATH, sizeof(pair.first.generic_path()), pair.first.generic_path().c_str());
+            this->poq->push(op);
         });
 
         // Check if a file was created or modified
@@ -56,10 +64,14 @@ void FileWatcher::start() {
             std::pair<bool, bool> pair = this->watched_directory->contains_and_match(p, metadata);
             // if not exists
             if (!pair.first) {
-                this->poq->push(Operation::get_instance(OPERATION_TYPE::CREATE, p));
+                auto op = Operation::get_instance(OPERATION_TYPE::CREATE);
+                op->add_TLV(TLV_TYPE::PATH, sizeof(p.generic_path()), p.generic_path().c_str());
+                this->poq->push(op);
             // if updated
             } else if (pair.second) {
-                this->poq->push(Operation::get_instance(OPERATION_TYPE::UPDATE, p));
+                auto op = Operation::get_instance(OPERATION_TYPE::UPDATE);
+                op->add_TLV(TLV_TYPE::PATH, sizeof(p.generic_path()), p.generic_path().c_str());
+                this->poq->push(op);
             }
         }
     }
