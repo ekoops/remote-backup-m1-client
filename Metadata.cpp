@@ -29,5 +29,5 @@ size_t Metadata::create_hash(const boost::filesystem::path &path) {
 }
 
 bool Metadata::operator!=(Metadata const& other) const {
-    return this->hash != other.hash
+    return this->hash != other.hash;
 }

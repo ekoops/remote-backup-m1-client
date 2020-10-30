@@ -7,13 +7,15 @@
 
 #include <string>
 #include <boost/filesystem/path.hpp>
+#include "TLV.h"
 
 enum OPERATION_TYPE {
-    CREATE, UPDATE, DELETE, SYNC
+    CREATE, UPDATE, DELETE, SYNC, AUTH
 };
 
 class Operation {
     OPERATION_TYPE type;
+    std::vector<TLV> tlv_chain;
     boost::filesystem::path path;
     Operation(OPERATION_TYPE type, boost::filesystem::path path);
 public:

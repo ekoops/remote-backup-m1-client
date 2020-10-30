@@ -18,6 +18,7 @@ FileWatcher::FileWatcher(std::shared_ptr<LockedDirectory> watched_directory,
 void FileWatcher::sync_watched_directory() {
     boost::filesystem::path path_from_server;
     //TODO obtain server_directory from server
+
     Directory server_directory{path_from_server};
     for (auto &de : server_directory.get_dir_content()) {
         std::pair<bool, bool> pair = this->watched_directory->contains_and_match(de.first, de.second);
@@ -56,7 +57,7 @@ void FileWatcher::start() {
             // if not exists
             if (!pair.first) {
                 this->poq->push(Operation::get_instance(OPERATION_TYPE::CREATE, p));
-                // if updated
+            // if updated
             } else if (pair.second) {
                 this->poq->push(Operation::get_instance(OPERATION_TYPE::UPDATE, p));
             }

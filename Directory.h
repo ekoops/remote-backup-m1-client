@@ -37,15 +37,15 @@ class Directory {
     Directory& operator=(Directory const& other) = delete;
 public:
     Directory(boost::filesystem::path dir_path) : dir_path{std::move(dir_path)} {}
-    virtual void insert(boost::filesystem::path const &path);
+    virtual bool insert(boost::filesystem::path const &path);
     virtual bool erase(boost::filesystem::path const &path);
     virtual bool update(boost::filesystem::path const& path, Metadata metadata);
-    virtual bool contains(boost::filesystem::path const& path) const;
-    virtual std::pair<bool, bool> contains_and_match(boost::filesystem::path const& path, Metadata const& metadata) const;
+    virtual bool contains(boost::filesystem::path const& path);
+    virtual std::pair<bool, bool> contains_and_match(boost::filesystem::path const& path, Metadata const& metadata);
     boost::filesystem::path get_dir_path() const;
     std::unordered_map<boost::filesystem::path, Metadata>& get_dir_content();
     virtual void for_each_if(std::function<bool(boost::filesystem::path const &)> const &pred,
-                     std::function<void(std::pair<boost::filesystem::path, Metadata> const&)> const &action) const;
+                     std::function<void(std::pair<boost::filesystem::path, Metadata> const&)> const &action);
 };
 
 #endif //PROVA_WATCHEDDIRECTORY_H
