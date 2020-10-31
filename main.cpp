@@ -7,15 +7,15 @@
 #include <boost/thread/thread.hpp>
 #include <netinet/in.h>
 #include <netdb.h>
-#include "FileWatcher.h"
+#include "file_watcher.h"
 #include "LockedDirectory.h"
-#include "Operation2.h"
+#include "op.h"
 
 #define WRITE_MASK 4 << 6
 #define DELAY_MS 5000
 
 
-void op_handler(boost::asio::ip::tcp::socket &socket, std::shared_ptr<PendingOperationsQueue> &poq,
+void op_handler(boost::asio::ip::tcp::socket &socket, std::shared_ptr<operation::operation_queue> &poq,
                 std::shared_ptr<LockedDirectory> const &ld) {
 
 }
@@ -42,43 +42,28 @@ bool authenticate(boost::asio::ip::tcp::socket &socket) {
         std::cout << "Failed to get password. Try again (attempts left " << 3 - attempts << ")." << std::endl;
         if (attempts == 3) return false;
     }
-    Operation2 op2 {OPERATION_TYPE::AUTH};
-    op2.add_TLV(TLV_TYPE::USRN, username.size(), username.c_str());
-    op2.add_TLV(TLV_TYPE::PSWD, password.size(), password.c_str());
-//    boost::array<char, 128> buffer;
-//    buffer[0] = 'a';
-//    buffer[1] = 'b';
+    operation::op auth_op {operation::OPERATION_TYPE::AUTH};
+    auth_op.add_TLV(operation::TLV_TYPE::USRN, username.size(), username.c_str());
+    auth_op.add_TLV(operation::TLV_TYPE::PSWD, password.size(), password.c_str());
+    auth_op.add_TLV(operation::TLV_TYPE::END);
+    auth_op.write_on_socket(socket);
+
+    operation::op op = operation::op::read_from_socket(socket);
+    op.parse();
+
     boost::system::error_code error;
-    std::cout << op2.raw_op.size() << std::endl;
-    std::string s {op2.raw_op.begin(), op2.raw_op.end()};
-    std::cout << s << std::endl;
-    socket.write_some(boost::asio::buffer(op2.raw_op), error);
+    std::vector<uint8_t> buffer = *auth_op.get_raw_op();
+    size_t len = socket.write_some(boost::asio::buffer(buffer), error);
 
-//    buffer[0] = '5'; // AUTH
-//    buffer[1] = '0'; // USR
-//    int max_length = 4;
-//    int pos = 2;
-//
-//    sprintf(buffer.data(), "50%04lu%s1%04lu%s",
-//            username.length(),
-//            username.c_str(),
-//            password.length(),
-//            password.c_str()
-//            );
-//    std::cout << buffer.data() << std::endl;
-//    /*for (int i=0; i<max_length; i++) {
-//        buffer[pos + i] = (length >> (max_length-1-i)*8)&0xFF;
-//    }*/
-//
-//    boost::system::error_code error;
-//    size_t len = socket.write_some(boost::asio::buffer(buffer), error);
-//    if (error) {
-//        std::cerr << "Failed to communicate with server." << std::endl;
-//        return false;
-//    }
+    if (error || buffer.size() != len) {
+        std::cerr << "Failed to communicate with server." << std::endl;
+        return false;
+    }
+
+    size_t len = socket.read_some(boost::asio::buffer(buf), error);
+    if (error == boost::asio::error::eof) break;
+    else if (error) throw boost::system::system_error(error);
     return true;
-
-//            else if (error) throw boost::system::system_error(error);
 }
 
 int main(int argc, char const *const argv[]) {
@@ -109,8 +94,8 @@ int main(int argc, char const *const argv[]) {
 
 //        std::shared_ptr<LockedDirectory> ld = LockedDirectory::get_instance(path_to_watch);
 //        std::shared_ptr<PendingOperationsQueue> poq = PendingOperationsQueue::get_instance();
-//        FileWatcher fw{ld, poq, std::chrono::milliseconds(DELAY_MS)};
-//        boost::thread fw_thread{[](FileWatcher &fw) {
+//        file_watcher fw{ld, poq, std::chrono::milliseconds(DELAY_MS)};
+//        boost::thread fw_thread{[](file_watcher &fw) {
 //            fw.sync_watched_directory();
 //            fw.start();
 //        }, std::ref(fw)};
