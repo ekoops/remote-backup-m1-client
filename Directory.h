@@ -28,24 +28,28 @@ namespace std {
     };
 }
 
+namespace directory {
+    class dir {
+        boost::filesystem::path path_;
+        std::unordered_map<boost::filesystem::path, meta> content_;
+        bool synced_;
+        std::mutex m_;
+        dir(boost::filesystem::path path, bool synced = false);
+    public:
+        dir(dir const &other) = delete;
+        dir &operator=(dir const &other) = delete;
+        static std::shared_ptr<dir> get_instance(boost::filesystem::path const& path, bool synced);
+        bool insert(boost::filesystem::path const &path);
+        bool erase(boost::filesystem::path const &path);
+        bool update(boost::filesystem::path const &path, Metadata metadata);
+        bool contains(boost::filesystem::path const &path);
+        std::pair<bool, bool> contains_and_match(boost::filesystem::path const &path, Metadata const &metadata);
+        [[nodiscard]] boost::filesystem::path get_path() const;
+        std::unordered_map<boost::filesystem::path, Metadata>* get_content();
+        void for_each_if(std::function<bool(boost::filesystem::path const &)> const &pred,
+               std::function<void(std::pair<boost::filesystem::path, Metadata> const &)> const &action);
 
-class Directory {
-    boost::filesystem::path dir_path;
-    std::unordered_map<boost::filesystem::path, Metadata> dir_content; // {percorso_del_file, hash_del_file}
-
-    Directory(Directory const& other) = delete;
-    Directory& operator=(Directory const& other) = delete;
-public:
-    Directory(boost::filesystem::path dir_path) : dir_path{std::move(dir_path)} {}
-    virtual bool insert(boost::filesystem::path const &path);
-    virtual bool erase(boost::filesystem::path const &path);
-    virtual bool update(boost::filesystem::path const& path, Metadata metadata);
-    virtual bool contains(boost::filesystem::path const& path);
-    virtual std::pair<bool, bool> contains_and_match(boost::filesystem::path const& path, Metadata const& metadata);
-    boost::filesystem::path get_dir_path() const;
-    std::unordered_map<boost::filesystem::path, Metadata>& get_dir_content();
-    virtual void for_each_if(std::function<bool(boost::filesystem::path const &)> const &pred,
-                     std::function<void(std::pair<boost::filesystem::path, Metadata> const&)> const &action);
-};
+    };
+}
 
 #endif //PROVA_WATCHEDDIRECTORY_H

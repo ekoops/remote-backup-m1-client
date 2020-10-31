@@ -42,28 +42,14 @@ bool authenticate(boost::asio::ip::tcp::socket &socket) {
         std::cout << "Failed to get password. Try again (attempts left " << 3 - attempts << ")." << std::endl;
         if (attempts == 3) return false;
     }
-    operation::op auth_op {operation::OPERATION_TYPE::AUTH};
+    operation::op auth_op{operation::OPERATION_TYPE::AUTH};
     auth_op.add_TLV(operation::TLV_TYPE::USRN, username.size(), username.c_str());
     auth_op.add_TLV(operation::TLV_TYPE::PSWD, password.size(), password.c_str());
     auth_op.add_TLV(operation::TLV_TYPE::END);
     auth_op.write_on_socket(socket);
 
     operation::op op = operation::op::read_from_socket(socket);
-    op.parse();
-
-    boost::system::error_code error;
-    std::vector<uint8_t> buffer = *auth_op.get_raw_op();
-    size_t len = socket.write_some(boost::asio::buffer(buffer), error);
-
-    if (error || buffer.size() != len) {
-        std::cerr << "Failed to communicate with server." << std::endl;
-        return false;
-    }
-
-    size_t len = socket.read_some(boost::asio::buffer(buf), error);
-    if (error == boost::asio::error::eof) break;
-    else if (error) throw boost::system::system_error(error);
-    return true;
+    op.execute();
 }
 
 int main(int argc, char const *const argv[]) {
@@ -92,6 +78,8 @@ int main(int argc, char const *const argv[]) {
         boost::asio::connect(socket, endpoints);
         authenticate(socket);
 
+        auto poq = operation::operation_queue::get_instance();
+        auto ld = directory::dir;
 //        std::shared_ptr<LockedDirectory> ld = LockedDirectory::get_instance(path_to_watch);
 //        std::shared_ptr<PendingOperationsQueue> poq = PendingOperationsQueue::get_instance();
 //        file_watcher fw{ld, poq, std::chrono::milliseconds(DELAY_MS)};
