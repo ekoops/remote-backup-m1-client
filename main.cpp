@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include "file_watcher.h"
-#include "LockedDirectory.h"
+#include "dir.h"
 #include "op.h"
 
 #define WRITE_MASK 4 << 6
@@ -16,8 +16,9 @@
 
 
 void op_handler(boost::asio::ip::tcp::socket &socket, std::shared_ptr<operation::operation_queue> &poq,
-                std::shared_ptr<LockedDirectory> const &ld) {
-
+                std::shared_ptr<directory::dir> const &ld) {
+    operation::op operation = poq->pop();
+    operation.
 }
 
 // AUTH USER LENGTH VALUE_USERNAME PASSWD LENGTH VALUE_PASSWORD TYPE_STOP
@@ -79,17 +80,15 @@ int main(int argc, char const *const argv[]) {
         authenticate(socket);
 
         auto poq = operation::operation_queue::get_instance();
-        auto ld = directory::dir;
-//        std::shared_ptr<LockedDirectory> ld = LockedDirectory::get_instance(path_to_watch);
-//        std::shared_ptr<PendingOperationsQueue> poq = PendingOperationsQueue::get_instance();
-//        file_watcher fw{ld, poq, std::chrono::milliseconds(DELAY_MS)};
-//        boost::thread fw_thread{[](file_watcher &fw) {
-//            fw.sync_watched_directory();
-//            fw.start();
-//        }, std::ref(fw)};
-//        boost::thread op_thread{op_handler, std::ref(socket), std::ref(poq), std::cref(ld)};
-//        fw_thread.join();
-//        op_thread.join();
+        auto dir = directory::dir::get_instance(path_to_watch, true);
+        file_watcher fw{dir, poq, std::chrono::milliseconds{DELAY_MS}};
+        boost::thread fw_thread{[](file_watcher &fw) {
+            fw.sync_watched_dir();
+            fw.start();
+        }, std::ref(fw)};
+        boost::thread op_thread{op_handler, std::ref(socket), std::ref(poq), std::cref(dir)};
+        fw_thread.join();
+        op_thread.join();
 
 
 

@@ -11,22 +11,22 @@
 #include <utility>
 #include <iostream>
 #include <thread>
-#include "LockedDirectory.h"
 #include <memory>
 #include <sstream>
 #include "operation_queue.h"
+#include "dir.h"
 
 
 class file_watcher {
-    std::chrono::milliseconds delay;
-    std::shared_ptr<LockedDirectory> watched_directory;
+    std::chrono::milliseconds wait_time_;
+    std::shared_ptr<directory::dir> watched_dir_;
     std::shared_ptr<operation::operation_queue> poq_;
     bool running_ = true;
 public:
-    file_watcher(std::shared_ptr<LockedDirectory> watched_directory,
+    file_watcher(std::shared_ptr<directory::dir> watched_dir,
                  std::shared_ptr<operation::operation_queue> poq,
-                 std::chrono::milliseconds delay);
-    void sync_watched_directory();
+                 std::chrono::milliseconds wait_time);
+    void sync_watched_dir();
     void start();
 };
 

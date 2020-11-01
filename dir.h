@@ -38,7 +38,7 @@ namespace directory {
     public:
         dir(dir const &other) = delete;
         dir &operator=(dir const &other) = delete;
-        static std::shared_ptr<dir> get_instance(boost::filesystem::path const& path, bool synced);
+        static std::shared_ptr<dir> get_instance(boost::filesystem::path const& path, bool synced = false);
         bool insert(boost::filesystem::path const &path);
         bool erase(boost::filesystem::path const &path);
         bool update(boost::filesystem::path const &path, Metadata metadata);

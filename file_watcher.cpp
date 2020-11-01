@@ -9,23 +9,24 @@ using operation::OPERATION_TYPE;
 using operation::TLV_TYPE;
 using operation::operation_queue;
 using operation::op;
+using directory::dir;
 
-file_watcher::file_watcher(std::shared_ptr<LockedDirectory> watched_directory,
-                           std::shared_ptr<operation::operation_queue> poq,
-                           std::chrono::milliseconds delay)
-        : watched_directory{std::move(watched_directory)}, poq_{std::move(poq)}, delay{delay} {
-    for (auto &de : recursive_directory_iterator(watched_directory->get_dir_path())) {
-        watched_directory->insert(de.path());
+file_watcher::file_watcher(std::shared_ptr<dir> watched_dir,
+                           std::shared_ptr<operation_queue> poq,
+                           std::chrono::milliseconds wait_time)
+        : watched_dir_{std::move(watched_dir)}, poq_{std::move(poq)}, wait_time_{wait_time} {
+    for (auto &de : recursive_directory_iterator(watched_dir_->get_path())) {
+        watched_dir_->insert(de.path());
     }
 }
 
-void file_watcher::sync_watched_directory() {
+void file_watcher::sync_watched_dir() {
     boost::filesystem::path path_from_server;
     //TODO obtain server_directory from server
 
-    Directory server_directory{path_from_server};
-    for (auto &de : server_directory.get_dir_content()) {
-        std::pair<bool, bool> pair = this->watched_directory->contains_and_match(de.first, de.second);
+    std::shared_ptr<directory::dir> server_dir = directory::dir::get_instance(path_from_server);
+    for (auto &de : *(server_dir->get_content())) {
+        std::pair<bool, bool> pair = this->watched_dir_->contains_and_match(de.first, de.second);
         // if doesn't exist
         if (!pair.first) {
             auto op = operation::op{OPERATION_TYPE::DELETE};
@@ -38,8 +39,8 @@ void file_watcher::sync_watched_directory() {
             this->poq_->push(op);
         }
     }
-    this->watched_directory->for_each_if([&server_directory](boost::filesystem::path const &path) {
-        return !server_directory.contains(path);
+    this->watched_dir_->for_each_if([&server_dir](boost::filesystem::path const &path) {
+        return !server_dir->contains(path);
     }, [this](std::pair<boost::filesystem::path, Metadata> const &pair) {
         auto op = operation::op{OPERATION_TYPE::CREATE};
         op.add_TLV(TLV_TYPE::PATH, sizeof(pair.first.generic_path()), pair.first.generic_path().c_str());
@@ -51,9 +52,9 @@ void file_watcher::sync_watched_directory() {
 void file_watcher::start() {
     using namespace boost::filesystem;
     while (running_) {
-        std::this_thread::sleep_for(delay);
+        std::this_thread::sleep_for(this->wait_time_);
 
-        this->watched_directory->for_each_if([](path const &p) {
+        this->watched_dir_->for_each_if([](path const &p) {
             return !exists(p);
         }, [this](std::pair<boost::filesystem::path, Metadata> const &pair) {
             auto op = operation::op{OPERATION_TYPE::DELETE};
@@ -62,10 +63,10 @@ void file_watcher::start() {
         });
 
         // Check if a file was created or modified
-        for (auto &file : recursive_directory_iterator(this->watched_directory->get_dir_path())) {
+        for (auto &file : recursive_directory_iterator(this->watched_dir_->get_path())) {
             path const &p = file.path();
             Metadata metadata = Metadata{p};
-            std::pair<bool, bool> pair = this->watched_directory->contains_and_match(p, metadata);
+            std::pair<bool, bool> pair = this->watched_dir_->contains_and_match(p, metadata);
             // if not exists
             if (!pair.first) {
                 auto op = operation::op{OPERATION_TYPE::CREATE};
