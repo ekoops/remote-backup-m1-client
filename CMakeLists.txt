@@ -11,6 +11,6 @@ find_package(Boost 1.73.0 REQUIRED COMPONENTS filesystem regex thread)
 find_package(OpenSSL REQUIRED)
 
 include_directories(${Boost_INCLUDE_DIR})
-add_executable(remote-backup-m1-client main.cpp file_watcher.cpp file_watcher.h dir.cpp dir.h Metadata.cpp Metadata.h op.cpp op.h operation_queue.cpp operation_queue.h)
+add_executable(remote-backup-m1-client main.cpp file_watcher.cpp file_watcher.h dir.cpp dir.h op.cpp op.h operation_queue.cpp operation_queue.h tlv_view.cpp tlv_view.h)
 
 target_link_libraries(remote-backup-m1-client ${Boost_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto)

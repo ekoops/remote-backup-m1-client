@@ -17,39 +17,22 @@ namespace operation {
     };
 
     enum TLV_TYPE {
-        USRN, PSWD, PATH, END
+        USRN, PSWD, PATH, END, OK, ERROR
     };
 
     class op {
+        std::shared_ptr<std::vector<uint8_t>> raw_op_;
     public:
-        std::shared_ptr<std::vector<uint8_t>> raw_op;
         explicit op(OPERATION_TYPE op_type = OPERATION_TYPE::NONE);
         void add_TLV(TLV_TYPE tlv_type, size_t length=0, char const * buffer = nullptr);
         void write_on_socket(boost::asio::ip::tcp::socket& socket);
         static op read_from_socket(boost::asio::ip::tcp::socket& socket);
-        void parse() {
-            std::vector<uint8_t>& raw = *this->raw_op;
-
-            auto op_type = static_cast<OPERATION_TYPE>(raw[0]);
-            for (int i=1; i<raw.size(); i++) {
-                auto tlv_type = static_cast<TLV_TYPE>(raw[i++]);
-                size_t length = 0;
-                for (int j=0; j<4; j++) {
-                    length += raw[i+j] << j*8;
-                }
-
-                if ()
-            }
-        }
+        [[nodiscard]] std::shared_ptr<std::vector<uint8_t>> get_raw_op() const;
+        [[nodiscard]] OPERATION_TYPE get_op_type() const;
 
         bool operator==(op const& other) const;
         friend std::size_t hash_value(op const &operation);
     };
-
-    std::size_t hash_value(op const &operation) {
-        boost::hash<std::vector<uint8_t>> hasher;
-        return hasher(*operation.raw_op);
-    }
 }
 
 

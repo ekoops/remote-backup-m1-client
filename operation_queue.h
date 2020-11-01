@@ -11,7 +11,6 @@
 #include "op.h"
 #include <boost/functional/hash.hpp>
 
-
 namespace operation {
 
     class operation_queue {
