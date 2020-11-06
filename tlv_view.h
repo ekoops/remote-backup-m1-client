@@ -49,7 +49,7 @@ namespace operation {
         bool is_finished() {
             return this->is_finished_;
         }
-        int get_tlv_type() {
+        int get_tlv_type() const {
             return static_cast<int>(this->tlv_type_);
         }
         size_t get_length() {
@@ -59,6 +59,12 @@ namespace operation {
             return this->data_begin_;
         }
         std::vector<uint8_t>::iterator end() {
+            return this->data_end_;
+        }
+        std::vector<uint8_t>::const_iterator cbegin() const {
+            return this->data_begin_;
+        }
+        std::vector<uint8_t>::const_iterator cend() const {
             return this->data_end_;
         }
     };

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <boost/functional/hash.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/filesystem/fstream.hpp>
 
 namespace operation {
     enum OPERATION_TYPE {
@@ -17,7 +18,7 @@ namespace operation {
     };
 
     enum TLV_TYPE {
-        USRN, PSWD, PATH, END, OK, ERROR
+        USRN, PSWD, ITEM, END, OK, ERROR, PATH, FILE
     };
 
     class op {
@@ -25,7 +26,8 @@ namespace operation {
     public:
         explicit op(OPERATION_TYPE op_type = OPERATION_TYPE::NONE);
         void add_TLV(TLV_TYPE tlv_type, size_t length=0, char const * buffer = nullptr);
-        void write_on_socket(boost::asio::ip::tcp::socket& socket);
+        void add_TLV(TLV_TYPE tlv_type, boost::filesystem::path const& path);
+            void write_on_socket(boost::asio::ip::tcp::socket& socket);
         static op read_from_socket(boost::asio::ip::tcp::socket& socket);
         [[nodiscard]] std::shared_ptr<std::vector<uint8_t>> get_raw_op() const;
         [[nodiscard]] OPERATION_TYPE get_op_type() const;

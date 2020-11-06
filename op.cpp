@@ -21,6 +21,24 @@ void op::add_TLV(TLV_TYPE tlv_type, size_t length, char const *buffer) {
     }
 }
 
+void op::add_TLV(TLV_TYPE tlv_type, boost::filesystem::path const& path) {
+    boost::filesystem::ifstream ifs;
+    ifs.open(path, std::ios_base::binary);
+    ifs.unsetf(std::ios::skipws);           // Stop eating new lines in binary mode!!!
+    std::streampos length;
+    ifs.seekg(0, std::ios::end);
+    length = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+
+    this->raw_op_->reserve(this->raw_op_->size() + 5 + length);
+    this->raw_op_->push_back(static_cast<uint8_t>(tlv_type));
+    for (int i = 0; i < 4; i++) {
+        this->raw_op_->push_back((length >> (3 - i) * 8) & 0xFF);
+    }
+    this->raw_op_->insert(this->raw_op_->end(),
+                          std::istream_iterator<uint8_t>(ifs),std::istream_iterator<uint8_t>());
+}
+
 void op::write_on_socket(boost::asio::ip::tcp::socket& socket) {
     boost::system::error_code error;
     auto buffer = *this->raw_op_;

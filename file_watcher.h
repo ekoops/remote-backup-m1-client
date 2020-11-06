@@ -8,7 +8,6 @@
 #include <chrono>
 #include <string>
 #include <boost/filesystem.hpp>
-#include <utility>
 #include <iostream>
 #include <thread>
 #include <memory>
@@ -26,7 +25,6 @@ public:
     file_watcher(std::shared_ptr<directory::dir> watched_dir,
                  std::shared_ptr<operation::operation_queue> poq,
                  std::chrono::milliseconds wait_time);
-    void sync_watched_dir();
     void start();
 };
 
