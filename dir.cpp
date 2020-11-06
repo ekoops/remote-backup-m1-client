@@ -37,7 +37,7 @@ bool dir::erase(boost::filesystem::path const &path) {
 bool dir::update(boost::filesystem::path const &path, std::string const& digest) {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
-    if (!this->contains(path)) return false;
+    if (this->content_.find(path) == this->content_.end()) return false;
     if (this->content_.insert_or_assign(path, digest).second) {
         throw std::runtime_error{"Insertion shouldn't took place"};
     }
@@ -45,6 +45,8 @@ bool dir::update(boost::filesystem::path const &path, std::string const& digest)
 }
 
 bool dir::contains(boost::filesystem::path const &path) {
+    std::unique_lock ul{this->m_, std::defer_lock};
+    if (synced_) ul.lock();
     return this->content_.find(path) != this->content_.end();
 }
 
@@ -54,8 +56,8 @@ dir::contains_and_match(boost::filesystem::path const &path, std::string const &
     if (synced_) ul.lock();
     auto it = this->content_.find(path);
     if (it == this->content_.end()) return {false, false};
-    else if (it->second != digest) return {true, true};
-    else return {true, false};
+    else if (it->second != digest) return {true, false};
+    else return {true, true};
 }
 
 boost::filesystem::path dir::get_path() const {

@@ -33,9 +33,17 @@ std::string tools::hash(boost::filesystem::path const &path) {
     return oss.str();
 }
 
-std::string tools::get_file_sign(boost::filesystem::path const &path,
-                                 std::string const &digest) {
+std::string tools::create_sign(boost::filesystem::path const &path,
+                               std::string const &digest) {
     std::ostringstream oss;
     oss << path.generic_path().string() << '\x00' << digest;
     return oss.str();
+}
+
+std::vector<std::string> tools::split_sign(std::string const& sign) {
+    std::istringstream oss{sign};
+    std::string temp;
+    std::vector<std::string> results(2);
+    while (std::getline(oss, temp, '\x00')) results.push_back(temp);
+    return results;
 }

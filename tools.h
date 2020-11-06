@@ -20,7 +20,7 @@ struct tools {
 
     static std::string hash(boost::filesystem::path const &path);
 
-    static std::string get_file_sign(boost::filesystem::path const &path, std::string const &digest);
-
+    static std::string create_sign(boost::filesystem::path const &path, std::string const &digest);
+    static std::vector<std::string> split_sign(std::string const& sign);
 };
 #endif //REMOTE_BACKUP_M1_CLIENT_tools_H

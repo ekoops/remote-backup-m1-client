@@ -37,9 +37,9 @@ void file_watcher::start() {
         this->watched_dir_->for_each_if([&root](path const &p) {
             // concatenare i path
             return !exists(root / p);
-        }, [&root, this](std::pair<path, std::string> const &pair) {
+        }, [this](std::pair<path, std::string> const &pair) {
             auto op = operation::op{OPERATION_TYPE::DELETE};
-            std::string sign = tools::get_file_sign(pair.first, pair.second);
+            std::string sign = tools::create_sign(pair.first, pair.second);
             op.add_TLV(TLV_TYPE::ITEM, sign.size(), sign.c_str());
             op.add_TLV(TLV_TYPE::END);
             this->poq_->push(op);
@@ -50,17 +50,17 @@ void file_watcher::start() {
         for (auto &file : recursive_directory_iterator(root)) {
             path const &path = file.path();
             std::string digest = tools::hash(path);
-            std::string sign = tools::get_file_sign(path, digest);
+            std::string sign = tools::create_sign(path, digest);
             std::pair<bool, bool> pair = this->watched_dir_->contains_and_match(path, digest);
-            // if not exists
+            // if doesn't exists
             if (!pair.first) {
                 auto op = operation::op{OPERATION_TYPE::CREATE};
                 op.add_TLV(TLV_TYPE::ITEM, sign.size(), sign.c_str());
                 op.add_TLV(TLV_TYPE::FILE, path);
                 op.add_TLV(TLV_TYPE::END);
                 this->poq_->push(op);
-                // if updated
-            } else if (pair.second) {
+                // if hash doesn't match
+            } else if (!pair.second) {
                 auto op = operation::op{OPERATION_TYPE::UPDATE};
                 op.add_TLV(TLV_TYPE::ITEM, sign.size(), sign.c_str());
                 op.add_TLV(TLV_TYPE::FILE, path);
