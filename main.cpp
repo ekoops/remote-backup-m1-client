@@ -123,11 +123,9 @@ void op_handler(boost::asio::ip::tcp::socket &socket, std::shared_ptr<operation:
         });
 
     } else {
-        std::cerr << "Unexpected server respponse" << std::endl;
+        std::cerr << "Communication failed" << std::endl;
         std::exit(-1);
     }
-
-
 }
 // SYNC ITEM LENGTH {PATH1 \nullcharacter hash}
 

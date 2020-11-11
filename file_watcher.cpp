@@ -21,7 +21,6 @@ file_watcher::file_watcher(std::shared_ptr<dir> watched_dir,
         path const& p = de.path();
         if (is_regular_file(p)) {
             watched_dir_->insert(p.generic_path().string().substr(pos));
-            std::cout << path {p.generic_path().string().substr(pos)} << std::endl;
         }
     }
 }
