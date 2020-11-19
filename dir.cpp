@@ -19,12 +19,13 @@ std::shared_ptr<dir> dir::get_instance(boost::filesystem::path const &path, bool
 bool dir::insert(boost::filesystem::path const &path) {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
-    if (!boost::filesystem::exists(path)) return false;
-
-    return this->content_.insert({path, tools::hash(path)}).second;
+    std::cout << "INSERT HASH " << tools::hash(this->path_ / path) << std::endl;
+    return this->content_.insert({path, tools::hash(this->path_ / path)}).second;
 }
 
 bool dir::insert(boost::filesystem::path const &path, std::string const &digest) {
+    std::unique_lock ul{this->m_, std::defer_lock};
+    if (synced_) ul.lock();
     return this->content_.insert({path, digest}).second;
 }
 
@@ -56,7 +57,10 @@ dir::contains_and_match(boost::filesystem::path const &path, std::string const &
     if (synced_) ul.lock();
     auto it = this->content_.find(path);
     if (it == this->content_.end()) return {false, false};
-    else if (it->second != digest) return {true, false};
+    else if (it->second != digest) {
+        std::cout << it->second << " " << digest << std::endl;
+        return {true, false};
+    }
     else return {true, true};
 }
 

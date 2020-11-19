@@ -12,18 +12,18 @@
 #include <thread>
 #include <memory>
 #include <sstream>
-#include "operation_queue.h"
+#include "message_queue.h"
 #include "dir.h"
 
 
 class file_watcher {
     std::chrono::milliseconds wait_time_;
     std::shared_ptr<directory::dir> watched_dir_;
-    std::shared_ptr<operation::operation_queue> poq_;
+    std::shared_ptr<communication::message_queue> poq_;
     bool running_ = true;
 public:
     file_watcher(std::shared_ptr<directory::dir> watched_dir,
-                 std::shared_ptr<operation::operation_queue> poq,
+                 std::shared_ptr<communication::message_queue> poq,
                  std::chrono::milliseconds wait_time);
     void start();
 };

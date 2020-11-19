@@ -3,8 +3,8 @@
 //
 
 #include "tools.h"
-#include "op.h"
-#include "tlv_view.h"
+#include "message.h"
+#include <boost/algorithm/hex.hpp>
 
 using boost::uuids::detail::md5;
 
@@ -17,20 +17,6 @@ std::pair<bool, std::vector<std::string>> tools::match_and_parse(boost::regex co
         }
         return {true, results};
     } else return {false, results};
-}
-
-std::string tools::hash(boost::filesystem::path const &path) {
-    std::ifstream ifs{path};
-    std::string s;
-    md5 hash;
-    md5::digest_type digest;
-    while (std::getline(ifs, s)) {
-        hash.process_bytes(s.data(), s.size());
-    }
-    hash.get_digest(digest);
-    std::ostringstream oss;
-    oss << digest[0] << digest[1] << digest[2] << digest[3];
-    return oss.str();
 }
 
 std::string tools::create_sign(boost::filesystem::path const &path,
@@ -46,4 +32,41 @@ std::vector<std::string> tools::split_sign(std::string const& sign) {
     std::vector<std::string> results(2);
     while (std::getline(oss, temp, '\x00')) results.push_back(temp);
     return results;
+}
+
+void tools::retry(std::function<void(void)> const &func, int attempts) {
+    while (attempts--) {
+        try {
+            func();
+            attempts = 0;
+        }
+        catch (boost::system::system_error &ex) {
+            if (!attempts) throw ex;
+        }
+    }
+}
+
+std::string tools::hash(boost::filesystem::path const &path) {
+    boost::filesystem::ifstream ifs;
+    ifs.open(path, std::ios_base::binary);
+    ifs.unsetf(std::ios::skipws);           // Stop eating new lines in binary mode!!!
+    std::streampos length;
+    ifs.seekg(0, std::ios::end);
+    length = ifs.tellg();
+    ifs.seekg(0, std::ios::beg);
+    md5 hash;
+    md5::digest_type digest;
+    for (int i=0; i<length; i++) {
+        hash.process_byte(ifs.get());
+    }
+    hash.get_digest(digest);
+    return hash_to_string(digest);
+}
+
+std::string tools::hash_to_string(md5::digest_type const& digest) {
+    const auto intDigest = reinterpret_cast<const int*>(&digest);
+    std::string result;
+
+    boost::algorithm::hex(intDigest, intDigest + (sizeof(md5::digest_type)/sizeof(int)), std::back_inserter(result));
+    return result;
 }
