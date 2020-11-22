@@ -11,21 +11,21 @@
 #include <algorithm>
 #include <functional>
 
-namespace std {
-    template<>
-    struct hash<boost::filesystem::path> {
-        size_t operator()(const boost::filesystem::path &path) const {
-            return std::hash<std::string>()(path.string());
-        }
-    };
-
-    template<>
-    struct equal_to<boost::filesystem::path> {
-        bool operator()(boost::filesystem::path const &path1, boost::filesystem::path const &path2) const {
-            return path1 == path2;
-        }
-    };
-}
+//namespace std {
+//    template<>
+//    struct hash<boost::filesystem::path> {
+//        size_t operator()(const boost::filesystem::path &path) const {
+//            return std::hash<std::string>()(path.string());
+//        }
+//    };
+//
+//    template<>
+//    struct equal_to<boost::filesystem::path> {
+//        bool operator()(boost::filesystem::path const &path1, boost::filesystem::path const &path2) const {
+//            return path1 == path2;
+//        }
+//    };
+//}
 
 namespace directory {
     class dir {

@@ -13,8 +13,8 @@ message::message(MESSAGE_TYPE msg_type) : raw_msg_{std::make_shared<std::vector<
     this->raw_msg_->push_back(static_cast<uint8_t>(msg_type));
 }
 
-message::message(size_t length) : raw_msg_{std::make_shared<std::vector<uint8_t>>(length)} {
-}
+message::message(size_t length) : raw_msg_{std::make_shared<std::vector<uint8_t>>(length)} {}
+message::message(std::shared_ptr<std::vector<uint8_t>> raw_msg): raw_msg_ {std::move(raw_msg)} {}
 
 void message::add_TLV(TLV_TYPE tlv_type, size_t length, char const *buffer) {
     this->raw_msg_->reserve(this->raw_msg_->size() + 5 + length);
@@ -54,7 +54,7 @@ MESSAGE_TYPE message::get_msg_type() const {
     return static_cast<MESSAGE_TYPE>((*this->raw_msg_)[0]);
 }
 
-boost::asio::mutable_buffer message::buffer() {
+boost::asio::mutable_buffer message::buffer() const {
     return boost::asio::buffer(*this->raw_msg_);
 }
 
@@ -81,7 +81,6 @@ std::ostream &communication::operator<<(std::ostream &os, communication::message
 
 std::size_t communication::hash_value(communication::message const &msg) {
     boost::hash<std::vector<uint8_t>> hasher;
-    std::cout << "HASH: " << hasher(*msg.get_raw_msg_ptr()) << std::endl;
     return hasher(*msg.get_raw_msg_ptr());
 }
 

@@ -5,16 +5,21 @@
 #include "connection.h"
 #include "tlv_view.h"
 #include "tools.h"
-#include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <algorithm>
 
-connection::connection(boost::asio::io_context &io) : socket_{io}, resolver_{io} {}
+connection::connection(boost::asio::io_context &io)
+        : strand_{boost::asio::make_strand(io)}, socket_{strand_}, resolver_{strand_}{}
 
 void connection::connect(std::string const &hostname, std::string const &portno) {
     boost::asio::ip::tcp::resolver::results_type endpoints =
             this->resolver_.resolve(hostname, portno); // equivalente a gethostbyname
     boost::asio::connect(this->socket_, endpoints);
+}
+
+std::shared_ptr<connection>
+connection::get_instance(boost::asio::io_context &io) {
+    return std::shared_ptr<connection>(new connection{io});
 }
 
 bool connection::authenticate() {
@@ -56,69 +61,12 @@ bool connection::authenticate() {
 }
 
 void connection::write(communication::message const &msg) {
-//    boost::asio::write(this->socket_, boost::asio::buffer(*msg.get_raw_msg_ptr()));
-
-//    boost::asio::streambuf buf;
-//    std::ostream os{&buf};
-//    boost::archive::binary_oarchive boar{os};
-//    boar & msg;
-
-//    size_t length = msg.get_raw_msg_ptr()->size();
-//    std::vector<uint8_t> header(8);
-//    for (int i = 0; i < 8; i++) {
-//        header[i] = length >> (7 - i) * 8 & 0xFF;
-//    }
     size_t header = msg.get_raw_msg_ptr()->size();
     std::vector<boost::asio::const_buffer> buffers;
     buffers.emplace_back(boost::asio::buffer(&header, sizeof(header)));
     buffers.emplace_back(boost::asio::buffer(*msg.get_raw_msg_ptr()));
     boost::asio::write(this->socket_, buffers);
 }
-//
-//communication::message connection::read() {
-////    std::vector<uint8_t> header(8);
-////    boost::asio::read(this->socket_, boost::asio::buffer(header, 7));
-////    communication::message msg;
-////    size_t length = 0;
-////    for (int i = 0; i < 8; i++) {
-////        length += header[i] << (7-i)*8;
-////    }
-////    std::cout << length << std::endl;
-////    msg.reserve(length);
-////    boost::asio::read(this->socket_, boost::asio::buffer(*msg.get_raw_msg_ptr()));
-////    std::for_each(msg.get_raw_msg_ptr()->begin(), msg.get_raw_msg_ptr()->end(), [](uint8_t a) {std::cout << std::to_string(a) << std::endl;});
-//
-////    return msg;
-//
-////    // read body
-////    boost::asio::streambuf buf;
-////    boost::asio::read(this->socket_, buf.prepare(header));
-////    buf.commit(header);
-////
-////    // deserialize
-////    std::istream is(&buf);
-////    boost::archive::binary_iarchive biar(is);
-////    communication::message msg;
-////    biar & msg;
-////    return msg;
-//}
-
-//void connection::write(communication::message const &msg) {
-//    boost::asio::streambuf buf;
-//    std::ostream os(&buf);
-//    boost::archive::binary_oarchive boar{os};
-//    boar & msg;
-//    const size_t header = buf.size();
-//
-//    // send header and buffer using scatter
-//    std::vector<boost::asio::const_buffer> buffers;
-//    buffers.push_back(boost::asio::buffer(&header, sizeof(header)));
-//    buffers.push_back(buf.data());
-//    const size_t rc = boost::asio::write(
-//            this->socket_,
-//            buffers
-//    );
-//}
 
 communication::message connection::read() {
     size_t header;
@@ -128,3 +76,87 @@ communication::message connection::read() {
     boost::asio::read(this->socket_, msg.buffer());
     return msg;
 }
+
+void connection::handle_payload_write(const boost::system::error_code &e,
+                                      communication::message const &msg,
+                                      std::function<void(void)> const &callback) {
+    if (!e) {
+        communication::message msg{this->buffer_};
+        communication::tlv_view view{msg};
+        if (view.next_tlv() && view.get_tlv_type() == communication::TLV_TYPE::OK) {
+            this->socket_.async_write_some(msg.buffer(), boost::bind(callback));
+        }
+    } else std::cerr << "Failed to read server control message" << std::endl;
+}
+
+void connection::handle_header_write(const boost::system::error_code &e,
+                                     communication::message const &msg,
+                                     std::function<void(void)> const &callback) {
+    if (!e) {
+        this->socket_.async_read_some(boost::asio::buffer(*this->buffer_),
+                                      boost::bind(&connection::handle_payload_write, this,
+                                                  boost::asio::placeholders::error,
+                                                  msg,
+                                                  callback));
+
+    } else std::cerr << "Failed to write message" << std::endl;
+}
+
+void connection::async_write(communication::message const &msg,
+                             std::function<void(void)> const &callback) {
+    size_t header = msg.get_raw_msg_ptr()->size();
+    this->socket_.async_write_some(boost::asio::buffer(&header, sizeof(header)),
+                                   boost::bind(&connection::handle_header_write,
+                                               this,
+                                               boost::asio::placeholders::error,
+                                               msg,
+                                               callback));
+}
+
+void connection::parse_payload(const boost::system::error_code &e,
+                               std::function<void(communication::message const&)> const &callback) {
+    if (!e) {
+        communication::message msg{this->buffer_};
+        callback(msg);
+    }
+}
+
+void connection::handle_payload_read(const boost::system::error_code &e,
+                                     std::function<void(communication::message const&)> const &callback) {
+    if (!e) {
+        this->socket_.async_read_some(boost::asio::buffer(*this->buffer_),
+                                      boost::bind(&connection::parse_payload, this,
+                                                  boost::asio::placeholders::error,
+                                                  callback));
+    } else std::cerr << "Failed to read server message" << std::endl;
+}
+
+void connection::handle_header_read(const boost::system::error_code &e,
+                                    std::function<void(communication::message const&)> const &callback) {
+    communication::message ctrl_msg{communication::MESSAGE_TYPE::CTRL};
+    if (!e) {
+        try {
+            this->buffer_->resize(this->header_);
+            ctrl_msg.add_TLV(communication::TLV_TYPE::OK);
+            ctrl_msg.add_TLV(communication::TLV_TYPE::END);
+            this->socket_.async_write_some(ctrl_msg.buffer(),
+                                           boost::bind(&connection::handle_payload_read, this,
+                                                       boost::asio::placeholders::error,
+                                                       callback));
+        }
+        catch (std::exception &ex) {
+            // Failed to realocate buffer, mainly  because the requested size is too much
+            // Sending error message
+            std::cerr << "Failed to resize buffer for server response" << std::endl;
+            std::exit(-1);
+        }
+    } else std::cerr << "Failed to read server message" << std::endl;
+}
+
+void connection::async_read(std::function<void(communication::message const&)> const &callback) {
+    this->socket_.async_read_some(boost::asio::buffer(&this->header_, sizeof(this->header_)),
+                                  boost::bind(&connection::handle_header_read, this,
+                                              boost::asio::placeholders::error,
+                                              callback));
+}
+

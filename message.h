@@ -15,7 +15,7 @@
 
 namespace communication {
     enum MESSAGE_TYPE {
-        NONE, CREATE, UPDATE, DELETE, SYNC, AUTH
+        NONE, CREATE, UPDATE, DELETE, SYNC, AUTH, CTRL
     };
 
     enum TLV_TYPE {
@@ -27,6 +27,7 @@ namespace communication {
     public:
         explicit message(MESSAGE_TYPE msg_type = MESSAGE_TYPE::NONE);
         explicit message(size_t length);
+        explicit message(std::shared_ptr<std::vector<uint8_t>> raw_msg_);
 
         void add_TLV(TLV_TYPE tlv_type, size_t length = 0, char const *buffer = nullptr);
 
@@ -35,7 +36,7 @@ namespace communication {
         [[nodiscard]] std::shared_ptr<std::vector<uint8_t>> get_raw_msg_ptr() const;
 
         [[nodiscard]] MESSAGE_TYPE get_msg_type() const;
-        boost::asio::mutable_buffer buffer();
+        boost::asio::mutable_buffer buffer() const;
         size_t size();
 
         bool operator==(message const &other) const;

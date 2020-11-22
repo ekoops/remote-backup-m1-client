@@ -5,6 +5,7 @@
 #include "tools.h"
 #include "message.h"
 #include <boost/algorithm/hex.hpp>
+#include <boost/asio.hpp>
 
 using boost::uuids::detail::md5;
 
@@ -26,7 +27,7 @@ std::string tools::create_sign(boost::filesystem::path const &path,
     return oss.str();
 }
 
-std::vector<std::string> tools::split_sign(std::string const& sign) {
+std::vector<std::string> tools::split_sign(std::string const &sign) {
     std::istringstream oss{sign};
     std::string temp;
     std::vector<std::string> results(2);
@@ -56,17 +57,24 @@ std::string tools::hash(boost::filesystem::path const &path) {
     ifs.seekg(0, std::ios::beg);
     md5 hash;
     md5::digest_type digest;
-    for (int i=0; i<length; i++) {
-        hash.process_byte(ifs.get());
-    }
+
+    std::string path_str {path.generic_path().string()};
+    hash.process_bytes(path_str.c_str(), path_str.size());
+
+    std::vector<char> file_buffer(length);
+    ifs.read(&*file_buffer.begin(), length);
+    hash.process_bytes(&*file_buffer.cbegin(), length);
     hash.get_digest(digest);
+
+//    std::cout << "HASH1 " << hash_to_string(digest) << std::endl;
     return hash_to_string(digest);
 }
 
-std::string tools::hash_to_string(md5::digest_type const& digest) {
-    const auto intDigest = reinterpret_cast<const int*>(&digest);
+std::string tools::hash_to_string(boost::uuids::detail::md5::digest_type const &digest) {
+    const auto int_digest = reinterpret_cast<const int *>(&digest);
     std::string result;
 
-    boost::algorithm::hex(intDigest, intDigest + (sizeof(md5::digest_type)/sizeof(int)), std::back_inserter(result));
+    boost::algorithm::hex(int_digest, int_digest + (sizeof(md5::digest_type) / sizeof(int)),
+                          std::back_inserter(result));
     return result;
 }

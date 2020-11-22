@@ -14,6 +14,7 @@
 #include <boost/uuid/detail/md5.hpp>
 #include "message.h"
 
+
 struct tools {
     static std::pair<bool, std::vector<std::string>>
     match_and_parse(boost::regex const &regex, std::string const &line);
@@ -27,7 +28,7 @@ struct tools {
     static void retry(std::function<void(void)> const &func, int attempts = 3);
 
 private:
-    static std::string hash_to_string(boost::uuids::detail::md5::digest_type const &digest);
+    static std::string hash_to_string(boost::uuids::detail::md5::digest_type const& digest);
 
 };
 
