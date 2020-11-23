@@ -11,7 +11,6 @@
 using namespace boost::filesystem;
 using communication::MESSAGE_TYPE;
 using communication::TLV_TYPE;
-using communication::message_queue;
 
 file_watcher::file_watcher(std::shared_ptr<directory::dir2> dir_ptr,
                            std::shared_ptr<scheduler> scheduler_ptr,
@@ -19,16 +18,17 @@ file_watcher::file_watcher(std::shared_ptr<directory::dir2> dir_ptr,
         : dir_ptr_{std::move(dir_ptr)}, scheduler_ptr_{std::move(scheduler_ptr)}, wait_time_{wait_time} {
     size_t pos = this->dir_ptr_->path().size();
     for (auto &de : recursive_directory_iterator(dir_ptr_->path())) {
-        path const &p = de.path();
-        if (is_regular_file(p)) {
-            dir_ptr_->insert_or_assign(p.generic_path().string().substr(pos),
-                                            directory::resource{boost::indeterminate, false,
-                                                                tools::hash(p)});
-//            dir_ptr_->insert_or_assign(p.generic_path().string().substr(pos),
-//                                       directory::resource{true, true,
-//                                                                tools::hash(p)});
+        boost::filesystem::path const &absolute_path = de.path();
+        if (is_regular_file(absolute_path)) {
+            boost::filesystem::path relative_path{absolute_path.generic_path().string().substr(pos)};
+            dir_ptr_->insert_or_assign(relative_path, directory::resource{
+                boost::indeterminate,
+                false,
+                tools::hash(absolute_path, relative_path)
+            });
         }
     }
+
 }
 
 //void file_watcher::start() {
@@ -111,8 +111,8 @@ void file_watcher::start() {
         for (auto &file : recursive_directory_iterator(root)) {
             path const &canonical_path = file.path();
             if (is_regular_file(canonical_path)) {
-                path const &relative_path = canonical_path.generic_path().string().substr(pos);
-                std::string digest = tools::hash(canonical_path);
+                boost::filesystem::path relative_path{canonical_path.generic_path().string().substr(pos)};
+                std::string digest = tools::hash(canonical_path, relative_path);
 
                 // if doesn't exists
                 if (!this->dir_ptr_->contains(relative_path)) {

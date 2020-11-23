@@ -19,7 +19,7 @@ struct tools {
     static std::pair<bool, std::vector<std::string>>
     match_and_parse(boost::regex const &regex, std::string const &line);
 
-    static std::string hash(boost::filesystem::path const &path);
+    static std::string hash(boost::filesystem::path const &absolute_path, boost::filesystem::path const& relative_path);
 
     static std::string create_sign(boost::filesystem::path const &path, std::string const &digest);
 

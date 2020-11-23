@@ -32,7 +32,7 @@ namespace directory {
         boost::filesystem::path path_;
         std::unordered_map<boost::filesystem::path, resource> content_;
         bool synced_;
-        std::recursive_mutex m_;
+        mutable std::recursive_mutex m_;
 
         dir2(boost::filesystem::path path, bool synced = false);
 
@@ -43,13 +43,13 @@ namespace directory {
 
         bool erase(boost::filesystem::path const &path);
 
-        bool contains(boost::filesystem::path const& path);
+        bool contains(boost::filesystem::path const& path) const;
 
         [[nodiscard]] boost::filesystem::path path() const;
 
-        [[nodiscard]] std::optional<resource> rsrc(boost::filesystem::path const &path);
+        [[nodiscard]] std::optional<resource> rsrc(boost::filesystem::path const &path) const;
 
-        void for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const &)> const &fn);
+        void for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const &)> const &fn) const;
     };
 }
 #endif //REMOTE_BACKUP_M1_CLIENT_DIR2_H

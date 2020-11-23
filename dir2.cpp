@@ -25,7 +25,7 @@ bool dir2::erase(boost::filesystem::path const& path) {
     return this->content_.erase(path) == 1;
 }
 
-bool dir2::contains(boost::filesystem::path const& path) {
+bool dir2::contains(boost::filesystem::path const& path) const {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
     return this->content_.find(path) != this->content_.end();
@@ -35,7 +35,7 @@ boost::filesystem::path dir2::path() const {
     return this->path_;
 }
 
-std::optional<resource> dir2::rsrc(boost::filesystem::path const& path) {
+std::optional<resource> dir2::rsrc(boost::filesystem::path const& path) const {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
     auto it = this->content_.find(path);
@@ -44,7 +44,7 @@ std::optional<resource> dir2::rsrc(boost::filesystem::path const& path) {
 }
 
 
-void dir2::for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const&)> const& fn) {
+void dir2::for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const&)> const& fn) const {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
     std::for_each(this->content_.cbegin(), this->content_.cend(), fn);

@@ -12,7 +12,6 @@
 #include <thread>
 #include <memory>
 #include <sstream>
-#include "message_queue.h"
 #include "dir2.h"
 #include "scheduler.h"
 

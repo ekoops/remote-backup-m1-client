@@ -48,8 +48,8 @@ namespace communication {
             return this->is_finished_;
         }
 
-        int get_tlv_type() const {
-            return static_cast<int>(this->tlv_type_);
+        communication::TLV_TYPE get_tlv_type() const {
+            return this->tlv_type_;
         }
 
         size_t get_length() {

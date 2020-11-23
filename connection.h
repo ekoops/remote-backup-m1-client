@@ -20,39 +20,49 @@ class connection {
     boost::asio::ip::tcp::resolver resolver_;
     size_t header_;
     std::shared_ptr<std::vector<uint8_t>> buffer_;
-
-    void parse_payload(const boost::system::error_code &e,
-                       std::function<void(communication::message const&)> const &callback);
+    boost::asio::io_context::work work_;
+    std::vector<std::thread> thread_group_;
 
     void handle_payload_write(const boost::system::error_code &e,
                               communication::message const &msg,
-                              std::function<void(void)> const &callback);
+                              std::function<void(void)> const &success_callback,
+                              std::function<void(void)> const &fail_callback);
 
     void handle_header_write(const boost::system::error_code &e,
                              communication::message const &msg,
-                             std::function<void(void)> const &callback);
+                             std::function<void(void)> const &success_callback,
+                             std::function<void(void)> const &fail_callback);
+
+    void parse_payload(const boost::system::error_code &e,
+                       std::function<void(communication::message const &)> const &success_callback,
+                       std::function<void(void)> const &fail_callback);
 
     void handle_payload_read(const boost::system::error_code &e,
-                             std::function<void(communication::message const&)> const &callback);
+                             std::function<void(communication::message const &)> const &success_callback,
+                             std::function<void(void)> const &fail_callback);
 
     void handle_header_read(const boost::system::error_code &e,
-                            std::function<void(communication::message const&)> const &callback);
+                            std::function<void(communication::message const &)> const &success_callback,
+                            std::function<void(void)> const &fail_callback);
 
     connection(boost::asio::io_context &io);
+
 public:
     static std::shared_ptr<connection> get_instance(boost::asio::io_context &io);
 
     void connect(std::string const &hostname, std::string const &portno);
 
-    bool authenticate();
+    bool write(communication::message const &msg);
 
-    void write(communication::message const &msg);
+    std::optional<communication::message> read();
 
-    communication::message read();
+    void async_write(communication::message const &msg,
+                     std::function<void(void)> const &success_callback,
+                     std::function<void(void)> const &fail_callback);
 
-    void async_write(communication::message const &msg, std::function<void(void)> const &callback);
-
-    void async_read(std::function<void(communication::message const&)> const &callback);
+    void async_read(
+            std::function<void(communication::message const &)> const &success_callback,
+            std::function<void(void)> const &fail_callback);
 };
 
 #endif //REMOTE_BACKUP_M1_CLIENT_CONNECTION_H

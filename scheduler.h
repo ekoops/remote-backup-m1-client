@@ -13,6 +13,7 @@
 class scheduler {
     std::shared_ptr<connection> connection_ptr_;
     std::shared_ptr<directory::dir2> dir_ptr_;
+    boost::asio::thread_pool thread_p;
 
 
     scheduler(std::shared_ptr<connection> connection_ptr, std::shared_ptr<directory::dir2> dir_ptr_);
@@ -20,6 +21,8 @@ class scheduler {
 public:
     static std::shared_ptr<scheduler>
     get_instance(std::shared_ptr<connection> connection_ptr, std::shared_ptr<directory::dir2> dir_ptr_);
+
+    bool try_auth(std::string const &username, std::string const &password);
 
     void schedule_sync();
 
@@ -29,15 +32,18 @@ public:
 
     void schedule_delete(boost::filesystem::path const &relative_path, std::string const &digest);
 
-    void handle_sync(communication::message const &request_msg, communication::message const& response_msg);
+    void handle_sync(communication::message const &response_msg);
 
-    void handle_create(boost::filesystem::path const &relative_path, communication::message const &request_msg,
+    static void
+    fail_callback(const std::shared_ptr<directory::dir2> &dir_ptr_, boost::filesystem::path const &relative_path);
+
+    void handle_create(boost::filesystem::path const &relative_path, std::string const &sign,
                        communication::message const &response_msg);
 
-    void handle_update(boost::filesystem::path const &relative_path, communication::message const &request_msg,
+    void handle_update(boost::filesystem::path const &relative_path, std::string const &sign,
                        communication::message const &response_msg);
 
-    void handle_delete(boost::filesystem::path const &relative_path, communication::message const &request_msg,
+    void handle_delete(boost::filesystem::path const &relative_path, std::string const &sign,
                        communication::message const &response_msg);
 
 };

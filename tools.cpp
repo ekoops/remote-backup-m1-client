@@ -47,9 +47,9 @@ void tools::retry(std::function<void(void)> const &func, int attempts) {
     }
 }
 
-std::string tools::hash(boost::filesystem::path const &path) {
+std::string tools::hash(boost::filesystem::path const &absolute_path, boost::filesystem::path const& relative_path) {
     boost::filesystem::ifstream ifs;
-    ifs.open(path, std::ios_base::binary);
+    ifs.open(absolute_path, std::ios_base::binary);
     ifs.unsetf(std::ios::skipws);           // Stop eating new lines in binary mode!!!
     std::streampos length;
     ifs.seekg(0, std::ios::end);
@@ -58,8 +58,8 @@ std::string tools::hash(boost::filesystem::path const &path) {
     md5 hash;
     md5::digest_type digest;
 
-    std::string path_str {path.generic_path().string()};
-    hash.process_bytes(path_str.c_str(), path_str.size());
+    std::string relative_path_str {relative_path.generic_path().string()};
+    hash.process_bytes(relative_path_str.c_str(), relative_path_str.size());
 
     std::vector<char> file_buffer(length);
     ifs.read(&*file_buffer.begin(), length);
