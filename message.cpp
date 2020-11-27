@@ -14,6 +14,10 @@ message::message(MESSAGE_TYPE msg_type) : raw_msg_{std::make_shared<std::vector<
 }
 
 message::message(size_t length) : raw_msg_{std::make_shared<std::vector<uint8_t>>(length)} {}
+
+message::message(MESSAGE_TYPE msg_type, size_t length): raw_msg_{std::make_shared<std::vector<uint8_t>>(length)} {
+    (*this->raw_msg_)[0] = msg_type;
+}
 message::message(std::shared_ptr<std::vector<uint8_t>> raw_msg): raw_msg_ {std::move(raw_msg)} {}
 
 void message::add_TLV(TLV_TYPE tlv_type, size_t length, char const *buffer) {
@@ -46,6 +50,8 @@ void message::add_TLV(TLV_TYPE tlv_type, boost::filesystem::path const &path) {
                            std::istream_iterator<uint8_t>(ifs), std::istream_iterator<uint8_t>());
 }
 
+
+
 std::shared_ptr<std::vector<uint8_t>> message::get_raw_msg_ptr() const {
     return this->raw_msg_;
 }
@@ -58,8 +64,12 @@ boost::asio::mutable_buffer message::buffer() const {
     return boost::asio::buffer(*this->raw_msg_);
 }
 
-size_t message::size() {
+size_t message::size() const {
     return this->raw_msg_->size();
+}
+
+void message::resize(size_t length) {
+    this->raw_msg_->resize(length);
 }
 
 bool message::operator==(message const &other) const {
@@ -72,23 +82,24 @@ std::ostream &communication::operator<<(std::ostream &os, communication::message
     while (view.next_tlv()) {
         os << "\tT: " << static_cast<int>(view.get_tlv_type()) << std::endl;
         os << "\tL: " << view.get_length() << std::endl;
-        if (view.get_tlv_type() != communication::TLV_TYPE::FILE) {
+        if (view.get_tlv_type() != communication::TLV_TYPE::CONTENT) {
             os << "\tV: " << std::string(view.cbegin(), view.cend()) << std::endl;
         }
     }
     return os;
 }
 
-std::size_t communication::hash_value(communication::message const &msg) {
-    boost::hash<std::vector<uint8_t>> hasher;
-    return hasher(*msg.get_raw_msg_ptr());
-}
+//std::size_t communication::hash_value(communication::message const &msg) {
+//    boost::hash<std::vector<uint8_t>> hasher;
+//    return hasher(*msg.get_raw_msg_ptr());
+//}
+//
+//
+//template<>
+//struct std::equal_to<message> {
+//    bool operator()(communication::message &msg1, communication::message &msg2) {
+//        return msg1.get_raw_msg_ptr() == msg2.get_raw_msg_ptr();
+//    }
+//};
 
-
-template<>
-struct std::equal_to<message> {
-    bool operator()(communication::message &msg1, communication::message &msg2) {
-        return msg1.get_raw_msg_ptr() == msg2.get_raw_msg_ptr();
-    }
-};
 

@@ -7,20 +7,28 @@
 
 #include <boost/filesystem.hpp>
 #include "connection.h"
-#include "dir2.h"
+#include "dir.h"
 
 
 class scheduler {
     std::shared_ptr<connection> connection_ptr_;
-    std::shared_ptr<directory::dir2> dir_ptr_;
-    boost::asio::thread_pool thread_p;
+    std::shared_ptr<directory::dir> dir_ptr_;
 
 
-    scheduler(std::shared_ptr<connection> connection_ptr, std::shared_ptr<directory::dir2> dir_ptr_);
+    scheduler(std::shared_ptr<directory::dir> dir_ptr, std::shared_ptr<connection> connection_ptr);
 
+    void handle_sync(communication::message const &response_msg);
+
+    void handle_create(boost::filesystem::path const &relative_path, std::string const &sign,
+                       communication::message const &response_msg);
+
+    void handle_update(boost::filesystem::path const &relative_path, std::string const &sign,
+                       communication::message const &response_msg);
+
+    void handle_delete(boost::filesystem::path const &relative_path, std::string const &sign,
+                       communication::message const &response_msg);
 public:
-    static std::shared_ptr<scheduler>
-    get_instance(std::shared_ptr<connection> connection_ptr, std::shared_ptr<directory::dir2> dir_ptr_);
+    static std::shared_ptr<scheduler> get_instance(std::shared_ptr<directory::dir> dir_ptr, std::shared_ptr<connection> connection_ptr );
 
     bool try_auth(std::string const &username, std::string const &password);
 
@@ -32,19 +40,8 @@ public:
 
     void schedule_delete(boost::filesystem::path const &relative_path, std::string const &digest);
 
-    void handle_sync(communication::message const &response_msg);
-
     static void
-    fail_callback(const std::shared_ptr<directory::dir2> &dir_ptr_, boost::filesystem::path const &relative_path);
-
-    void handle_create(boost::filesystem::path const &relative_path, std::string const &sign,
-                       communication::message const &response_msg);
-
-    void handle_update(boost::filesystem::path const &relative_path, std::string const &sign,
-                       communication::message const &response_msg);
-
-    void handle_delete(boost::filesystem::path const &relative_path, std::string const &sign,
-                       communication::message const &response_msg);
+    fail_callback(const std::shared_ptr<directory::dir> &dir_ptr_, boost::filesystem::path const &relative_path);
 
 };
 

@@ -2,8 +2,8 @@
 // Created by leonardo on 21/11/20.
 //
 
-#ifndef REMOTE_BACKUP_M1_CLIENT_DIR2_H
-#define REMOTE_BACKUP_M1_CLIENT_DIR2_H
+#ifndef REMOTE_BACKUP_M1_CLIENT_DIR_H
+#define REMOTE_BACKUP_M1_CLIENT_DIR_H
 
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
@@ -28,16 +28,16 @@ namespace std {
 }
 
 namespace directory {
-    class dir2 {
+    class dir {
         boost::filesystem::path path_;
         std::unordered_map<boost::filesystem::path, resource> content_;
         bool synced_;
         mutable std::recursive_mutex m_;
 
-        dir2(boost::filesystem::path path, bool synced = false);
+        dir(boost::filesystem::path path, bool synced = false);
 
     public:
-        static std::shared_ptr<dir2> get_instance(boost::filesystem::path const &path, bool synced = false);
+        static std::shared_ptr<dir> get_instance(boost::filesystem::path const &path, bool synced = false);
 
         bool insert_or_assign(boost::filesystem::path const &path, resource rsrc);
 
@@ -52,4 +52,4 @@ namespace directory {
         void for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const &)> const &fn) const;
     };
 }
-#endif //REMOTE_BACKUP_M1_CLIENT_DIR2_H
+#endif //REMOTE_BACKUP_M1_CLIENT_DIR_H

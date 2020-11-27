@@ -1,7 +1,6 @@
 #include <iostream>
 #include <boost/filesystem.hpp>
 #include <boost/asio.hpp>
-#include <boost/array.hpp>
 #include <boost/regex.hpp>
 #include <boost/bind/bind.hpp>
 #include <boost/thread.hpp>
@@ -51,31 +50,35 @@ int main(int argc, char const *const argv[]) {
         // canonical returns the absolute path resolving symbolic link, dot and dot-dot
         // it also checks the existance
         boost::filesystem::path path_to_watch{boost::filesystem::canonical(argv[1])};
-        std::string hostname{argv[2]};
-        // Trying to parse port number
-        std::string portno{argv[3]};
-        // Checking path existance and permissions...
         if (!boost::filesystem::is_directory(path_to_watch)) {
             std::cerr << "Path provided is not a directory" << std::endl;
             return -2;
         }
-        auto dir2 = directory::dir2::get_instance(path_to_watch, true);
+        std::string hostname{argv[2]};
+        std::string portno{argv[3]};
+
+        // Constructing an abstraction for the watched directory
+        auto watched_dir_ptr = directory::dir::get_instance(path_to_watch, true);
+
+        // Setting up the SSL connection
         boost::asio::io_context io_context;
-        auto conn = connection::get_instance(io_context);
-        auto scheduler = scheduler::get_instance(conn, dir2);
-        conn->connect(hostname, portno);
-        if (!login(scheduler)) {
+        boost::asio::ssl::context ctx {boost::asio::ssl::context::sslv23};
+        ctx.set_verify_mode(boost::asio::ssl::verify_peer);
+        ctx.load_verify_file("ca.pem");
+        auto connection_ptr = connection::get_instance(io_context, ctx);
+        // Constructing an abstraction for scheduling task and managing communication
+        // with server through the connection
+        auto scheduler_ptr = scheduler::get_instance(watched_dir_ptr, connection_ptr);
+
+        connection_ptr->connect(hostname, portno);
+        if (!login(scheduler_ptr)) {
             std::cerr << "Authentication failed" << std::endl;
             return -3;
         }
-        std::cout << "Authenticated" << std::endl;
-        file_watcher fw{dir2, scheduler, std::chrono::milliseconds{DELAY_MS}};
-        scheduler->schedule_sync();
-//        fw.start();
-        boost::thread fw_thread{[](file_watcher &fw) {
-            fw.start();
-        }, std::ref(fw)};
-        fw_thread.join();
+        // Constructing an abstraction for monitoring the filesystem and scheduling
+        // server sinchronizations through scheduler
+        file_watcher fw {watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{DELAY_MS}};
+        fw.start();
     }
     catch (boost::filesystem::filesystem_error &e) {
         std::cerr << "Filesystem error from " << e.what() << std::endl;

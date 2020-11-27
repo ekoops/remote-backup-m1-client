@@ -15,18 +15,22 @@
 
 namespace communication {
     enum MESSAGE_TYPE {
-        NONE, CREATE, UPDATE, DELETE, SYNC, AUTH, CTRL
+        NONE, CREATE, UPDATE, DELETE, SYNC, AUTH
     };
 
     enum TLV_TYPE {
-        USRN, PSWD, ITEM, END, OK, ERROR, PATH, FILE
+        USRN, PSWD, ITEM, END, OK, ERROR, PATH, CONTENT
     };
 
     class message {
         std::shared_ptr<std::vector<uint8_t>> raw_msg_;
     public:
         explicit message(MESSAGE_TYPE msg_type = MESSAGE_TYPE::NONE);
+
         explicit message(size_t length);
+
+        explicit message(MESSAGE_TYPE msg_type, size_t length);
+
         explicit message(std::shared_ptr<std::vector<uint8_t>> raw_msg_);
 
         void add_TLV(TLV_TYPE tlv_type, size_t length = 0, char const *buffer = nullptr);
@@ -36,8 +40,12 @@ namespace communication {
         [[nodiscard]] std::shared_ptr<std::vector<uint8_t>> get_raw_msg_ptr() const;
 
         [[nodiscard]] MESSAGE_TYPE get_msg_type() const;
+
         boost::asio::mutable_buffer buffer() const;
-        size_t size();
+
+        size_t size() const;
+
+        void resize(size_t length);
 
         bool operator==(message const &other) const;
 
@@ -49,7 +57,7 @@ namespace communication {
 
     std::ostream &operator<<(std::ostream &os, communication::message const &msg);
 
-    std::size_t hash_value(communication::message const &msg);
+//    std::size_t hash_value(communication::message const &msg);
 }
 
 
