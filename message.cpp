@@ -61,7 +61,7 @@ MESSAGE_TYPE message::get_msg_type() const {
 }
 
 boost::asio::mutable_buffer message::buffer() const {
-    return boost::asio::buffer(*this->raw_msg_);
+    return boost::asio::buffer(*this->raw_msg_, this->size());
 }
 
 size_t message::size() const {

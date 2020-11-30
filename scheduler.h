@@ -14,7 +14,6 @@ class scheduler {
     std::shared_ptr<connection> connection_ptr_;
     std::shared_ptr<directory::dir> dir_ptr_;
 
-
     scheduler(std::shared_ptr<directory::dir> dir_ptr, std::shared_ptr<connection> connection_ptr);
 
     void handle_sync(communication::message const &response_msg);

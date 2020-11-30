@@ -21,15 +21,15 @@ namespace directory {
     public:
         resource(boost::logic::tribool synced, bool exist_on_server, std::string digest);
 
-        resource synced(boost::logic::tribool const &synced);
+        resource& synced(boost::logic::tribool const &synced);
 
         [[nodiscard]] boost::logic::tribool synced() const;
 
-        resource exist_on_server(bool exist_on_server);
+        resource& exist_on_server(bool exist_on_server);
 
         [[nodiscard]] bool exist_on_server() const;
 
-        resource digest(std::string digest);
+        resource& digest(std::string digest);
 
         [[nodiscard]] std::string digest() const;
     };

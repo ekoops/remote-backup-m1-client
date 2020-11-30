@@ -16,19 +16,18 @@
 
 
 struct tools {
-    static std::pair<bool, std::vector<std::string>>
-    match_and_parse(boost::regex const &regex, std::string const &line);
-
-    static std::string hash(boost::filesystem::path const &absolute_path, boost::filesystem::path const& relative_path);
+    static std::string hash(boost::filesystem::path const &absolute_path, boost::filesystem::path const &relative_path);
 
     static std::string create_sign(boost::filesystem::path const &path, std::string const &digest);
 
-    static std::vector<std::string> split_sign(std::string const &sign);
+    static std::pair<boost::filesystem::path, std::string> split_sign(std::string const &sign);
+
+    static std::pair<bool, std::vector<std::string>> match_and_parse(boost::regex const &regex, std::string const &line);
 
     static void retry(std::function<void(void)> const &func, int attempts = 3);
 
 private:
-    static std::string hash_to_string(boost::uuids::detail::md5::digest_type const& digest);
+    static std::string hash_to_string(boost::uuids::detail::md5::digest_type const &digest);
 
 };
 

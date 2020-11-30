@@ -13,7 +13,7 @@ resource::resource(boost::logic::tribool synced, bool exist_on_server, std::stri
                                                                                              digest_{std::move(
                                                                                                      digest)} {}
 
-resource resource::synced(boost::logic::tribool const &synced) {
+resource& resource::synced(boost::logic::tribool const &synced) {
     this->synced_ = synced;
     return *this;
 }
@@ -22,7 +22,7 @@ resource resource::synced(boost::logic::tribool const &synced) {
     return this->synced_;
 }
 
-resource resource::exist_on_server(bool exist_on_server) {
+resource& resource::exist_on_server(bool exist_on_server) {
     this->exist_on_server_ = exist_on_server;
     return *this;
 }
@@ -31,7 +31,7 @@ resource resource::exist_on_server(bool exist_on_server) {
     return this->exist_on_server_;
 }
 
-resource resource::digest(std::string digest) {
+resource& resource::digest(std::string digest) {
     this->digest_ = std::move(digest);
     return *this;
 }

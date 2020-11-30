@@ -8,12 +8,11 @@ using namespace directory;
 
 dir::dir(boost::filesystem::path path, bool synced) : path_{std::move(path)}, synced_{synced} {}
 
-
-std::shared_ptr<dir> dir::get_instance(boost::filesystem::path const &path, bool synced) {
-    return std::shared_ptr<dir>(new dir{path, synced});
+std::shared_ptr<dir> dir::get_instance(boost::filesystem::path path, bool synced) {
+    return std::shared_ptr<dir>(new dir{std::move(path), synced});
 }
 
-bool dir::insert_or_assign(boost::filesystem::path const &path, resource rsrc) {
+bool dir::insert_or_assign(boost::filesystem::path const &path, resource const& rsrc) {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
     return this->content_.insert_or_assign(path, rsrc).second;
@@ -31,7 +30,7 @@ bool dir::contains(boost::filesystem::path const& path) const {
     return this->content_.find(path) != this->content_.end();
 }
 
-boost::filesystem::path dir::path() const {
+boost::filesystem::path const& dir::path() const {
     return this->path_;
 }
 
@@ -46,5 +45,8 @@ std::optional<resource> dir::rsrc(boost::filesystem::path const& path) const {
 void dir::for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const&)> const& fn) const {
     std::unique_lock ul{this->m_, std::defer_lock};
     if (synced_) ul.lock();
-    std::for_each(this->content_.cbegin(), this->content_.cend(), fn);
+    auto it = this->content_.cbegin();
+    while (it != this->content_.cend()) fn(*it++);
+//    std::for_each(this->content_.cbegin(), this->content_.cend(), fn);
 }
+

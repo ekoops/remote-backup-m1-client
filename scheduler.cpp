@@ -9,9 +9,10 @@
 #include "f_message.h"
 #include <boost/function.hpp>
 
+namespace fs = boost::filesystem;
 
 scheduler::scheduler(std::shared_ptr<directory::dir> dir_ptr, std::shared_ptr<connection> connection_ptr)
-        : dir_ptr_{std::move(dir_ptr)},  connection_ptr_{std::move(connection_ptr)}{}
+        : dir_ptr_{std::move(dir_ptr)}, connection_ptr_{std::move(connection_ptr)} {}
 
 std::shared_ptr<scheduler>
 scheduler::get_instance(std::shared_ptr<directory::dir> dir_ptr, std::shared_ptr<connection> connection_ptr) {
@@ -34,7 +35,7 @@ bool scheduler::try_auth(std::string const &username, std::string const &passwor
 }
 
 void scheduler::fail_callback(std::shared_ptr<directory::dir> const &dir_ptr_,
-                              boost::filesystem::path const &relative_path) {
+                              fs::path const &relative_path) {
     auto rsrc = dir_ptr_->rsrc(relative_path);
     if (rsrc) dir_ptr_->insert_or_assign(relative_path, rsrc.value().synced(false));
 }
@@ -48,36 +49,40 @@ void scheduler::handle_sync(communication::message const &response_msg) {
         std::cerr << "Failed to sync server state" << std::endl;
         std::exit(-1);
     }
+
+    auto s_dir_ptr = directory::dir::get_instance("S_DIR");
+
+    // Checking for server elements that should be deleted or updated
     do {
         if (s_view.get_tlv_type() == communication::TLV_TYPE::ITEM) {
             std::string s_sign{s_view.cbegin(), s_view.cend()};
-            auto sign_parts = tools::split_sign(s_sign);
-            boost::filesystem::path const &relative_path = sign_parts[0];
-            std::string digest = sign_parts[1];
+            auto splitted_sign = tools::split_sign(s_sign);
+            fs::path const &relative_path = splitted_sign.first;
+            std::string digest = splitted_sign.second;
+            s_dir_ptr->insert_or_assign(relative_path, directory::resource{
+                    boost::indeterminate, // unused field for server dir
+                    true,   // unused field for server dir
+                    digest
+            });
             if (!this->dir_ptr_->contains(relative_path)) {
                 this->schedule_delete(relative_path, digest);
             } else {
                 auto rsrc = this->dir_ptr_->rsrc(relative_path).value();
                 if (rsrc.digest() != digest) this->schedule_update(relative_path, digest);
-                else this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
+                else this->dir_ptr_->insert_or_assign(relative_path,rsrc.synced(true).exist_on_server(true));
             }
         }
     } while (s_view.next_tlv());
 
-    auto s_dir_ptr = directory::dir::get_instance("S_DIR");
-
-    this->dir_ptr_->for_each([this, &s_dir_ptr](std::pair<boost::filesystem::path, directory::resource> const &pair) {
+    // Checking for server elements that should be created
+    this->dir_ptr_->for_each([this, &s_dir_ptr](std::pair<fs::path, directory::resource> const &pair) {
         if (!s_dir_ptr->contains(pair.first)) {
             this->schedule_create(pair.first, pair.second.digest());
         }
     });
-    std::cout << "SYNC ended" << std::endl;
 }
 
-//    CREATE ITEM xxxx PATH\x00DIGEST CONTENT yyyy ....
-//v   CREATE ITEM xxxx PATH\x00DIGEST OK 0000 END 0000
-//x   CREATE ITEM xxxx PATH\x00DIGEST ERROR 0000 END 0000
-void scheduler::handle_create(boost::filesystem::path const &relative_path,
+void scheduler::handle_create(fs::path const &relative_path,
                               std::string const &sign,
                               communication::message const &response_msg) {
     communication::tlv_view s_view{response_msg};
@@ -87,15 +92,14 @@ void scheduler::handle_create(boost::filesystem::path const &relative_path,
         s_view.get_tlv_type() == communication::TLV_TYPE::ITEM &&
         sign == std::string{s_view.cbegin(), s_view.cend()} &&
         s_view.next_tlv() &&
-        s_view.get_tlv_type() == communication::TLV_TYPE::OK
-            ) {
+        s_view.get_tlv_type() == communication::TLV_TYPE::OK) {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
     } else {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(false));
     }
 }
 
-void scheduler::handle_update(boost::filesystem::path const &relative_path,
+void scheduler::handle_update(fs::path const &relative_path,
                               std::string const &sign,
                               communication::message const &response_msg) {
     communication::tlv_view s_view{response_msg};
@@ -110,20 +114,9 @@ void scheduler::handle_update(boost::filesystem::path const &relative_path,
     ));
 }
 
-//req CREATE ITEM LENGTH PATH\x00DIGEST CONTENT LENGTH ....
-//res CREATE ITEM LENGTH PATH\x00DIGEST | CREATE ERROR 0
-//req UPDATE ITEM LENGTH PATH\x00DIGEST CONTENT LENGTH ....
-//res UPDATE ITEM LENGTH PATH\x00DIGEST | UPDATE ERROR 0
-//req DELETE ITEM LENGTH PATH\x00DIGEST CONTENT LENGTH ....
-//res DELETE ITEM LENGTH PATH\x00DIGEST | DELETE ERROR 0
-//req SYNC
-//res SYNC ITEM LENGTH PATH\x00DIGEST ITEM ... | SYNC ERROR 0
-//req AUTH USRN LENGTH username PSWD LENGTH password
-//res AUTH OK 0 | AUTH ERROR 0
-void scheduler::handle_delete(boost::filesystem::path const &relative_path,
+void scheduler::handle_delete(fs::path const &relative_path,
                               std::string const &sign,
                               communication::message const &response_msg) {
-
     communication::tlv_view s_view{response_msg};
     directory::resource rsrc = this->dir_ptr_->rsrc(relative_path).value();
     if (response_msg.get_msg_type() == communication::MESSAGE_TYPE::DELETE &&
@@ -147,7 +140,7 @@ void scheduler::schedule_sync() {
             &scheduler::handle_sync,
             this,
             boost::placeholders::_1
-    ), [](){std::exit(-1);});
+    ), []() { std::exit(-1); });
 
 //        this->connection_ptr_->async_write2(request_msg,[](communication::message const& response_message){
 ////        std::cout << response_message << std::endl;
@@ -159,14 +152,9 @@ void scheduler::schedule_sync() {
 //        }, []() { std::exit(-1); });
 //    }, []() { std::exit(-1); });
 }
-//req CREATE   ITEM    xxxx    PATH\x00DIGEST  CONTENT    yyyy    CONTENT...
-//res CREATE   ITEM    xxxx    PATH\x00DIGEST  OK   0000   END     0000
-
-// CREATE   ITEM    xxxx    PATH\x00DIGEST  CONTENT    zzzz    CONTENT...
-// END 0000
 
 
-void scheduler::schedule_create(boost::filesystem::path const &relative_path, std::string const &digest) {
+void scheduler::schedule_create(fs::path const &relative_path, std::string const &digest) {
     directory::resource rsrc = directory::resource{
             boost::indeterminate,
             false,
@@ -202,7 +190,7 @@ void scheduler::schedule_create(boost::filesystem::path const &relative_path, st
 //    }, boost::bind(scheduler::fail_callback, this->dir_ptr_, relative_path));
 }
 
-void scheduler::schedule_update(boost::filesystem::path const &relative_path, std::string const &digest) {
+void scheduler::schedule_update(fs::path const &relative_path, std::string const &digest) {
     directory::resource rsrc = directory::resource{
             boost::indeterminate,
             true,
@@ -239,7 +227,7 @@ void scheduler::schedule_update(boost::filesystem::path const &relative_path, st
 //    }, boost::bind(scheduler::fail_callback, this->dir_ptr_, relative_path));
 }
 
-void scheduler::schedule_delete(boost::filesystem::path const &relative_path, std::string const &digest) {
+void scheduler::schedule_delete(fs::path const &relative_path, std::string const &digest) {
     directory::resource rsrc = directory::resource{
             boost::indeterminate,
             true,
@@ -249,7 +237,7 @@ void scheduler::schedule_delete(boost::filesystem::path const &relative_path, st
     this->dir_ptr_->insert_or_assign(relative_path, rsrc);
 
     std::string sign = tools::create_sign(relative_path, digest);
-    communication::message request_msg {communication::MESSAGE_TYPE::DELETE};
+    communication::message request_msg{communication::MESSAGE_TYPE::DELETE};
     request_msg.add_TLV(communication::TLV_TYPE::ITEM, sign.size(), sign.c_str());
     request_msg.add_TLV(communication::TLV_TYPE::END);
     this->connection_ptr_->post(request_msg, boost::bind(

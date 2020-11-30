@@ -32,24 +32,26 @@ namespace directory {
         boost::filesystem::path path_;
         std::unordered_map<boost::filesystem::path, resource> content_;
         bool synced_;
-        mutable std::recursive_mutex m_;
-
-        dir(boost::filesystem::path path, bool synced = false);
+        mutable std::recursive_mutex m_;    // we need to acquire lock also in const methods
 
     public:
-        static std::shared_ptr<dir> get_instance(boost::filesystem::path const &path, bool synced = false);
+        static std::shared_ptr<dir> get_instance(boost::filesystem::path path, bool synced = false);
 
-        bool insert_or_assign(boost::filesystem::path const &path, resource rsrc);
+        // TODO ottimizzare il passaggio di parametro
+        bool insert_or_assign(boost::filesystem::path const &path, resource const& rsrc);
 
         bool erase(boost::filesystem::path const &path);
 
-        bool contains(boost::filesystem::path const& path) const;
+        [[nodiscard]] bool contains(boost::filesystem::path const& path) const;
 
-        [[nodiscard]] boost::filesystem::path path() const;
+        [[nodiscard]] boost::filesystem::path const& path() const;
 
         [[nodiscard]] std::optional<resource> rsrc(boost::filesystem::path const &path) const;
 
         void for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const &)> const &fn) const;
+
+    private:
+        explicit dir(boost::filesystem::path path, bool synced = false);
     };
 }
 #endif //REMOTE_BACKUP_M1_CLIENT_DIR_H
