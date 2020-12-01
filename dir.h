@@ -1,7 +1,3 @@
-//
-// Created by leonardo on 21/11/20.
-//
-
 #ifndef REMOTE_BACKUP_M1_CLIENT_DIR_H
 #define REMOTE_BACKUP_M1_CLIENT_DIR_H
 
@@ -11,6 +7,7 @@
 #include <boost/filesystem.hpp>
 #include "resource.h"
 
+// Redefinition of hash and equal_to function for boost::filesystem::path
 namespace std {
     template<>
     struct hash<boost::filesystem::path> {
@@ -31,13 +28,12 @@ namespace directory {
     class dir {
         boost::filesystem::path path_;
         std::unordered_map<boost::filesystem::path, resource> content_;
-        bool synced_;
+        bool concurrent_accessed_;
         mutable std::recursive_mutex m_;    // we need to acquire lock also in const methods
 
     public:
-        static std::shared_ptr<dir> get_instance(boost::filesystem::path path, bool synced = false);
+        static std::shared_ptr<dir> get_instance(boost::filesystem::path path, bool concurrent_accessed = false);
 
-        // TODO ottimizzare il passaggio di parametro
         bool insert_or_assign(boost::filesystem::path const &path, resource const& rsrc);
 
         bool erase(boost::filesystem::path const &path);
@@ -51,7 +47,7 @@ namespace directory {
         void for_each(std::function<void(std::pair<boost::filesystem::path, directory::resource> const &)> const &fn) const;
 
     private:
-        explicit dir(boost::filesystem::path path, bool synced = false);
+        explicit dir(boost::filesystem::path path, bool concurrent_accessed = false);
     };
 }
 #endif //REMOTE_BACKUP_M1_CLIENT_DIR_H

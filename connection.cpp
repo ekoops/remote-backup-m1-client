@@ -1,9 +1,4 @@
-//
-// Created by leonardo on 16/11/20.
-//
-
 #include "connection.h"
-#include "tlv_view.h"
 #include <boost/archive/binary_oarchive.hpp>
 #include <algorithm>
 #include <boost/thread.hpp>
@@ -11,16 +6,12 @@
 
 namespace ssl = boost::asio::ssl;
 
-
-
 connection::connection(boost::asio::io_context &io,
                        ssl::context &ctx,
                        size_t thread_pool_size
 ) : work_{io}, strand_{boost::asio::make_strand(io)},
     socket_{strand_, ctx},
-    resolver_{strand_},
-    buffer_{std::make_shared<std::vector<uint8_t>>(communication::f_message::CHUNK_SIZE)} {
-//    // TODO: modificare
+    resolver_{strand_} {
 
     this->socket_.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
     this->socket_.set_verify_callback(boost::bind(&connection::verify_certificate, this,
@@ -35,10 +26,10 @@ bool connection::verify_certificate(bool preverified, ssl::verify_context &ctx) 
     return true; // TODO
 }
 
-void connection::connect(std::string const &hostname, std::string const &port) {
+void connection::connect(std::string const &hostname, std::string const &service) {
     // resolve throws boost::system::system_error
     boost::asio::ip::tcp::resolver::results_type endpoints =
-            this->resolver_.resolve(hostname, port); // equivalente a gethostbyname
+            this->resolver_.resolve(hostname, service); // equivalente a gethostbyname
 
     // connect throws boost::system::system_error
     try {

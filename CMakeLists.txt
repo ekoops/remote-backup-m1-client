@@ -7,7 +7,7 @@ set(CMAKE_CXX_FLAGS -pthread)
 #[[set(OPENSSL_USE_STATIC_LIBS TRUE)]]
 
 set(BOOST_ROOT boost)
-find_package(Boost 1.73.0 REQUIRED COMPONENTS filesystem regex thread serialization)
+find_package(Boost 1.73.0 REQUIRED COMPONENTS filesystem regex thread serialization program_options)
 find_package(OpenSSL REQUIRED)
 
 include_directories(${Boost_INCLUDE_DIR})
