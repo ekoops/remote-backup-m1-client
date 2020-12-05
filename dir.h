@@ -24,6 +24,11 @@ namespace std {
     };
 }
 
+/*
+ * This class provides an abstraction of a filesystem directory.
+ * It allows to manage the associated directory resources in
+ * a concurrent way.
+ */
 namespace directory {
     class dir {
         boost::filesystem::path path_;

@@ -1,7 +1,3 @@
-//
-// Created by leonardo on 25/11/20.
-//
-
 #ifndef REMOTE_BACKUP_M1_CLIENT_F_MESSAGE_H
 #define REMOTE_BACKUP_M1_CLIENT_F_MESSAGE_H
 
@@ -9,6 +5,11 @@
 
 
 namespace communication {
+    /* This class is a specialization of the message class
+     * to handle in a more efficient way messages containing
+     * file chunks. Specifically it provided on each next_chunk()
+     * invocation a new chunk view ready to be sent
+     */
     class f_message : public message {
         boost::filesystem::ifstream ifs_;
         std::vector<uint8_t>::iterator f_content_;

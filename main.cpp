@@ -11,6 +11,21 @@
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
+void terminate(
+        boost::asio::io_context &io,
+        file_watcher &fw,
+        std::shared_ptr<scheduler> const &scheduler_ptr,
+        std::shared_ptr<connection> const &connection_ptr
+) {
+    std::cout << "Terminating..." << std::endl;
+//    io.stop();
+//    fw.stop();
+//    scheduler_ptr->close();
+//    connection_ptr->close();
+    std::cout << "SCIACCA" << std::endl;
+}
+
+
 bool login(const std::shared_ptr<scheduler> &scheduler) {
     std::string username, password;
 //    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
@@ -36,7 +51,7 @@ bool login(const std::shared_ptr<scheduler> &scheduler) {
                       << std::endl;
             if (!field_attempts) return false;
         }
-        if (scheduler->try_auth(username, password)) return true;
+        if (scheduler->auth(username, password)) return true;
         else std::cout << "Authentication failed (attempts left " << --general_attempts << ")." << std::endl;
     }
     return false;
@@ -81,9 +96,8 @@ po::variables_map parse_options(int argc, char const *const argv[]) {
         auto path_to_watch = vm["path-to-watch"];
         if (path_to_watch.defaulted()) {
             std::cout << "--path-to-watch option set to default value: "
-                << path_to_watch.as<fs::path>() << std::endl;
-        }
-        else {
+                      << path_to_watch.as<fs::path>() << std::endl;
+        } else {
             auto dir = path_to_watch.as<fs::path>();
             if (!fs::is_directory(dir)) {
                 std::cerr << dir << " is not a directory" << std::endl;
@@ -92,11 +106,11 @@ po::variables_map parse_options(int argc, char const *const argv[]) {
         }
         if (vm["threads"].defaulted()) {
             std::cout << "--threads option set to default value: "
-                      << vm["threads"].as<size_t>()<< std::endl;
+                      << vm["threads"].as<size_t>() << std::endl;
         }
         if (vm["delay"].defaulted()) {
             std::cout << "--delay option set to default value: "
-                      << vm["delay"].as<size_t>()<< std::endl;
+                      << vm["delay"].as<size_t>() << std::endl;
         }
         return vm;
     }
@@ -111,6 +125,7 @@ int main(int argc, char const *const argv[]) {
     po::variables_map vm = parse_options(argc, argv);
 
     try {
+        // Destructuring program options
         fs::path path_to_watch = vm["path-to-watch"].as<fs::path>();
         std::string hostname = vm["hostname"].as<std::string>();
         std::string service = vm["service"].as<std::string>();
@@ -120,27 +135,38 @@ int main(int argc, char const *const argv[]) {
         // Constructing an abstraction for the watched directory
         auto watched_dir_ptr = directory::dir::get_instance(path_to_watch, true);
 
-        // Setting up the SSL connection
         boost::asio::io_context io_context;
         // Allowing generic SSL/TLS version
         boost::asio::ssl::context ctx{boost::asio::ssl::context::sslv23};
         ctx.load_verify_file("../certs/ca.pem");
+        // Constructing an abstraction for handling SSL connection task
         auto connection_ptr = connection::get_instance(io_context, ctx, thread_pool_size);
         // Constructing an abstraction for scheduling task and managing communication
         // with server through the connection
-        auto scheduler_ptr = scheduler::get_instance(watched_dir_ptr, connection_ptr);
+        auto scheduler_ptr = scheduler::get_instance(io_context, watched_dir_ptr, connection_ptr, thread_pool_size);
+        // Constructing an abstraction for monitoring the filesystem and scheduling
+        // server synchronizations through scheduler
+        file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
 
+        // Setting callback to handle process signals
+        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+        // Start an asynchronous wait for one of the signals to occur.
+        signals.async_wait(boost::bind(
+                &terminate,
+                boost::ref(io_context),
+                boost::ref(fw),
+                boost::cref(scheduler_ptr),
+                boost::cref(connection_ptr)
+        ));
+        // Performing server connection
         connection_ptr->connect(hostname, service);
+        // Starting login procedure
         if (!login(scheduler_ptr)) {
             std::cerr << "Authentication failed" << std::endl;
-            return -3;
+            return EXIT_FAILURE;
         }
-
-        // Constructing an abstraction for monitoring the filesystem and scheduling
-        // server sinchronizations through scheduler
-        file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
+        // Starting specified directory local file watching
         fw.start();
-        connection_ptr->join_threads();
     }
     catch (fs::filesystem_error &e) {
         std::cerr << "Filesystem error from " << e.what() << std::endl;

@@ -1,19 +1,22 @@
-//
-// Created by leonardo on 25/11/20.
-//
-
 #include "f_message.h"
-#include <boost/filesystem.hpp>
 #include <boost/filesystem/exception.hpp>
 
 using namespace communication;
 
 size_t const f_message::CHUNK_SIZE = 4096;
 
+/**
+ * Construct an f_message instance for a specific file.
+ *
+ * @param msg_type the message type
+ * @param path the file absolute path
+ * @param path the file sign
+ * @return a new constructed f_message instance
+ */
 f_message::f_message(MESSAGE_TYPE msg_type,
                      boost::filesystem::path const &path,
-                     std::string const &sign)
-        : message{msg_type}, ifs_{path, std::ios_base::binary}, completed_ {false} {
+                     std::string const &sign) // the sign is added to improve performance
+        : message{msg_type}, ifs_{path, std::ios_base::binary}, completed_{false} {
     this->ifs_.unsetf(std::ios::skipws);
     this->ifs_.seekg(0, std::ios::end);
     this->remaining_ = this->f_length_ = this->ifs_.tellg();
@@ -21,20 +24,35 @@ f_message::f_message(MESSAGE_TYPE msg_type,
     this->add_TLV(TLV_TYPE::ITEM, sign.size(), sign.c_str());
     this->header_size_ = this->size();
     this->resize(CHUNK_SIZE);
-    this->f_content_ = std::next(this->get_raw_msg_ptr()->begin(), this->header_size_);
+    this->f_content_ = std::next(this->raw_msg_ptr()->begin(), this->header_size_);
     this->f_content_[0] = communication::TLV_TYPE::CONTENT;
     std::advance(this->f_content_, 1);
 }
 
-std::shared_ptr<communication::f_message> f_message::get_instance(MESSAGE_TYPE msg_type,
-                                                                  boost::filesystem::path const &path,
-                                                                  std::string const &sign) {
+/**
+ * Construct an f_message instance std::shared_ptr for a specific file.
+ *
+ * @param msg_type the message type
+ * @param path the file absolute path
+ * @param path the file sign
+ * @return a new constructed f_message std::shared_ptr instance
+ */
+std::shared_ptr<communication::f_message> f_message::get_instance(
+        MESSAGE_TYPE msg_type,
+        boost::filesystem::path const &path,
+        std::string const &sign
+) {
     return std::shared_ptr<communication::f_message>(new f_message{msg_type, path, sign});
 }
 
+/**
+ * Allow to obtain the next file chunk view
+ *
+ * @return true if the next chunk is available and
+ * ready to be used.
+ */
 bool f_message::next_chunk() {
     if (this->completed_) return false;
-    std::cout << "f_length: " << this->f_length_ << "\tremaining: " << this->remaining_ << std::endl;
     size_t to_read;
     if (this->remaining_ >= CHUNK_SIZE - this->header_size_ - 5 - 5) {
         to_read = CHUNK_SIZE - this->header_size_ - 5;
