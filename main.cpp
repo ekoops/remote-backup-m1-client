@@ -148,16 +148,16 @@ int main(int argc, char const *const argv[]) {
         // server synchronizations through scheduler
         file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
 
-        // Setting callback to handle process signals
-        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
-        // Start an asynchronous wait for one of the signals to occur.
-        signals.async_wait(boost::bind(
-                &terminate,
-                boost::ref(io_context),
-                boost::ref(fw),
-                boost::cref(scheduler_ptr),
-                boost::cref(connection_ptr)
-        ));
+//        // Setting callback to handle process signals
+//        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
+//        // Start an asynchronous wait for one of the signals to occur.
+//        signals.async_wait(boost::bind(
+//                &terminate,
+//                boost::ref(io_context),
+//                boost::ref(fw),
+//                boost::cref(scheduler_ptr),
+//                boost::cref(connection_ptr)
+//        ));
         // Performing server connection
         connection_ptr->connect(hostname, service);
         // Starting login procedure

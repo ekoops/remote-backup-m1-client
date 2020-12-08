@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "connection.h"
 #include "f_message.h"
+#include "tlv_view.h"
 
 namespace ssl = boost::asio::ssl;
 
@@ -166,15 +167,37 @@ bool connection::write(communication::message const &request_msg) {
 std::optional<communication::message> connection::read() {
     std::cout << "START READ" << std::endl;
     size_t header = 0;
+    auto raw_msg_ptr = std::make_shared<std::vector<uint8_t>>();
+    auto insert_pos = raw_msg_ptr->begin();
+    bool ended = false;
+    communication::MESSAGE_TYPE msg_type;
+    bool first = true;
     try {
-        boost::asio::read(this->socket_, boost::asio::buffer(&header, sizeof(header)));
-        auto raw_msg_ptr = std::make_shared<std::vector<uint8_t>>(header);
-        boost::asio::read(this->socket_, boost::asio::buffer(*raw_msg_ptr, header));
+        do {
+            boost::asio::read(this->socket_, boost::asio::buffer(&header, sizeof(header)));
+            if (!first) {
+                header--;
+                boost::asio::read(this->socket_, boost::asio::buffer(&msg_type, 1));
+            }
+            std::cout << "Header: " << header << std::endl;
+            raw_msg_ptr->resize(raw_msg_ptr->size() + header);
+            insert_pos = raw_msg_ptr->end();
+            std::advance(insert_pos, -header);
+            std::cout << (insert_pos - raw_msg_ptr->begin()) << std::endl;
+            boost::asio::read(this->socket_, boost::asio::buffer(&*insert_pos, header));
+            if (first) first = false;
+            communication::message temp_msg {raw_msg_ptr};
+            communication::tlv_view view{temp_msg};
+            while (view.next_tlv()) {
+                if (view.tlv_type() == communication::ERROR ||
+                    view.tlv_type() == communication::END) {
+                    ended = true;
+                }
+            }
+        } while (!ended);
         communication::message response_msg{raw_msg_ptr};
-        std::cout << "<<<<<<<<<<RESPONSE>>>>>>>>>" << std::endl;
-        std::cout << "HEADER: " << header << std::endl;
         std::cout << response_msg;
-        return std::make_optional<communication::message>(response_msg);
+        return std::make_optional<communication::message>(raw_msg_ptr);
     }
     catch (boost::system::system_error &ex) {
         auto error_code = ex.code();
@@ -192,6 +215,43 @@ std::optional<communication::message> connection::read() {
         return std::nullopt;
     }
 }
+
+//std::optional<communication::message> connection::read() {
+//    std::cout << "START READ" << std::endl;
+//    size_t header = 0;
+//    auto raw_msg_ptr = std::make_shared<std::vector<uint8_t>>();
+//    auto insert_pos = raw_msg_ptr->begin();
+//    try {
+//        do {
+//            boost::asio::read(this->socket_, boost::asio::buffer(&header, sizeof(header)));
+//            insert_pos = raw_msg_ptr->end();
+//            raw_msg_ptr->resize(raw_msg_ptr->size()+header);
+//            boost::asio::read(this->socket_, boost::asio::buffer(*raw_msg_ptr, header));
+//            communication::message response_msg{raw_msg_ptr};
+//            communication::tlv_view view{response_msg};
+//
+//        } while ();
+//        std::cout << "<<<<<<<<<<RESPONSE>>>>>>>>>" << std::endl;
+//        std::cout << "HEADER: " << header << std::endl;
+//        std::cout << response_msg;
+//        return std::make_optional<communication::message>(response_msg);
+//    }
+//    catch (boost::system::system_error &ex) {
+//        auto error_code = ex.code();
+//        if (error_code == boost::asio::error::eof ||
+//            error_code == boost::asio::error::connection_reset) {
+//            std::cerr << "Connection to the server has been lost" << std::endl;
+//            std::exit(EXIT_FAILURE);
+//        } else {
+//            std::cerr << "Failed to read message from server" << std::endl;
+//            return std::nullopt;
+//        }
+//    }
+//    catch (std::exception &ex) {
+//        std::cerr << "Error in read():\n\t" << ex.what() << std::endl;
+//        return std::nullopt;
+//    }
+//}
 
 /**
  * Allow to gracefully close server connection and

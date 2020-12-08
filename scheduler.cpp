@@ -264,7 +264,9 @@ void scheduler::create(fs::path const &relative_path, std::string const &digest)
                 false,
                 digest
         };
-        std::cout << "Scheduling CREATE for: " << relative_path << ":\n\t" << rsrc;
+        std::ostringstream oss;
+        oss << "Scheduling CREATE for: " << relative_path << ":\n\t" << rsrc;
+        std::cout << oss.str();
         this->dir_ptr_->insert_or_assign(relative_path, rsrc);
 
         std::string sign = tools::create_sign(relative_path, digest);
@@ -306,7 +308,9 @@ void scheduler::update(fs::path const &relative_path, std::string const &digest)
                 true,
                 digest
         };
-        std::cout << "Scheduling UPDATE for: " << relative_path << ":\n\t" << rsrc;
+        std::ostringstream oss;
+        oss << "Scheduling UPDATE for: " << relative_path << ":\n\t" << rsrc;
+        std::cout << oss.str();
         this->dir_ptr_->insert_or_assign(relative_path, rsrc);
 
         std::string sign = tools::create_sign(relative_path, digest);
@@ -348,7 +352,9 @@ void scheduler::erase(fs::path const &relative_path, std::string const &digest) 
                 true,
                 digest
         };
-        std::cout << "Scheduling ERASE for: " << relative_path << ":\n\t" << rsrc;
+        std::ostringstream oss;
+        oss << "Scheduling ERASE for: " << relative_path << ":\n\t" << rsrc;
+        std::cout << oss.str();
         this->dir_ptr_->insert_or_assign(relative_path, rsrc);
 
         std::string sign = tools::create_sign(relative_path, digest);

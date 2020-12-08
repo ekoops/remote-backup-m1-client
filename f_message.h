@@ -14,7 +14,6 @@ namespace communication {
         boost::filesystem::ifstream ifs_;
         std::vector<uint8_t>::iterator f_content_;
         size_t header_size_;
-        size_t f_length_;
         size_t remaining_;
         bool completed_;
         f_message(MESSAGE_TYPE msg_type,
