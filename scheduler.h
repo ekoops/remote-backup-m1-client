@@ -46,8 +46,6 @@ public:
             size_t thread_pool_size
     );
 
-    bool auth(std::string const &username, std::string const &password);
-
     void sync();
 
     void create(boost::filesystem::path const &relative_path, std::string const &digest);

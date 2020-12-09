@@ -25,38 +25,6 @@ void terminate(
     std::cout << "SCIACCA" << std::endl;
 }
 
-
-bool login(const std::shared_ptr<scheduler> &scheduler) {
-    std::string username, password;
-//    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
-//    boost::regex password_regex{"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
-    boost::regex username_regex{".*"};
-    boost::regex password_regex{".*"};
-    int field_attempts = 3;
-    int general_attempts = 3;
-
-    while (general_attempts) {
-        std::cout << "Insert your username:" << std::endl;
-        while (!(std::cin >> username) || !boost::regex_match(username, username_regex)) {
-            std::cin.clear();
-            std::cout << "Failed to get username. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
-            if (!field_attempts) return false;
-        }
-        field_attempts = 0;
-        std::cout << "Insert your password:" << std::endl;
-        while (!(std::cin >> password) || !boost::regex_match(password, password_regex)) {
-            std::cin.clear();
-            std::cout << "Failed to get password. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
-            if (!field_attempts) return false;
-        }
-        if (scheduler->auth(username, password)) return true;
-        else std::cout << "Authentication failed (attempts left " << --general_attempts << ")." << std::endl;
-    }
-    return false;
-}
-
 po::variables_map parse_options(int argc, char const *const argv[]) {
     try {
         po::options_description desc("Backup client options");
@@ -159,12 +127,14 @@ int main(int argc, char const *const argv[]) {
 //                boost::cref(connection_ptr)
 //        ));
         // Performing server connection
-        connection_ptr->connect(hostname, service);
+        connection_ptr->resolve(hostname, service);
+        connection_ptr->connect();
         // Starting login procedure
-        if (!login(scheduler_ptr)) {
+        if (!connection_ptr->login()) {
             std::cerr << "Authentication failed" << std::endl;
             return EXIT_FAILURE;
         }
+
         // Starting specified directory local file watching
         fw.start();
     }

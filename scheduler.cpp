@@ -64,26 +64,6 @@ std::shared_ptr<scheduler> scheduler::get_instance(
     });
 }
 
-/**
- * Allow to try to authenticate client user
- *
- * @param username the client user username
- * @param password the client user password
- * @return true if the user has been successfully authenticated, false otherwise
- */
-bool scheduler::auth(std::string const &username, std::string const &password) {
-    communication::message auth_msg{communication::MESSAGE_TYPE::AUTH};
-    auth_msg.add_TLV(communication::TLV_TYPE::USRN, username.size(), username.c_str());
-    auth_msg.add_TLV(communication::TLV_TYPE::PSWD, password.size(), password.c_str());
-    auth_msg.add_TLV(communication::TLV_TYPE::END);
-
-    std::optional<communication::message> msg;
-    if (this->connection_ptr_->write(auth_msg) && (msg = this->connection_ptr_->read())) {
-        communication::tlv_view view{msg.value()};
-        return view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK;
-    }
-    return false;
-}
 
 /**
  * Allow to handle SYNC message server response
@@ -242,11 +222,8 @@ void scheduler::sync() {
     request_msg.add_TLV(communication::TLV_TYPE::END);
     std::cout << "Scheduling SYNC..." << std::endl;
 
-    this->connection_ptr_->post(request_msg, boost::bind(
-            &scheduler::handle_sync,
-            this,
-            boost::placeholders::_1
-    ));
+    auto response = this->connection_ptr_->sync_post(request_msg);
+    this->handle_sync(response);
 }
 
 /**

@@ -34,6 +34,8 @@ namespace communication {
 
         [[nodiscard]] size_t length() const;
 
+        bool verify_end() const;
+
         std::vector<uint8_t>::iterator begin();
 
         std::vector<uint8_t>::iterator end();

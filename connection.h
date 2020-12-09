@@ -11,39 +11,58 @@
 #include <mutex>
 #include "f_message.h"
 #include "message.h"
+#include "user.h"
 
 class connection {
     // needed for isolated completion handler execution
     boost::asio::strand<boost::asio::io_context::executor_type> strand_;
     boost::asio::ssl::stream<boost::asio::ip::tcp::socket> socket_;
     boost::asio::ip::tcp::resolver resolver_;
+    boost::asio::ip::tcp::resolver::results_type endpoints_;
     // prevent io_context object's run() call from returning when there is no more work to do
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
+    boost::asio::steady_timer keepalive_timer_;
+    user user_;
 
 public:
-    static std::shared_ptr<connection> get_instance(boost::asio::io_context &io,
-                                                    boost::asio::ssl::context &ctx,
-                                                    size_t thread_pool_size);
+    static std::shared_ptr<connection> get_instance(
+            boost::asio::io_context &io,
+            boost::asio::ssl::context &ctx,
+            size_t thread_pool_size
+    );
 
-    void connect(std::string const &hostname, std::string const &service);
+    void resolve(std::string const &hostname, std::string const &service);
 
-    bool write(communication::message const &request_msg);
+    void connect();
 
-    std::optional<communication::message> read();
+    bool login();
 
+    void keepalive(boost::system::error_code const &e);
+
+    void schedule_keepalive();
+
+    std::optional<communication::message> sync_post(communication::message const &request_msg);
 
     void post(communication::message const &request_msg,
-              std::function<void(std::optional<communication::message> const&)> const &fn);
+              std::function<void(std::optional<communication::message> const &)> const &fn);
 
     void post(std::shared_ptr<communication::f_message> const &request_msg,
-              std::function<void(std::optional<communication::message> const&)> const &fn);
+              std::function<void(std::optional<communication::message> const &)> const &fn);
+
     void close();
 
 private:
     connection(boost::asio::io_context &io, boost::asio::ssl::context &ctx, size_t thread_pool_size);
 
     bool verify_certificate(bool preverified, boost::asio::ssl::verify_context &ctx);
+
+    bool auth(user &usr);
+
+    bool write(communication::message const &request_msg);
+
+    std::optional<communication::message> read();
+
 };
 
 #endif //REMOTE_BACKUP_M1_CLIENT_CONNECTION_H

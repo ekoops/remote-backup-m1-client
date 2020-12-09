@@ -36,6 +36,15 @@ bool tlv_view::next_tlv() {
     return true;
 }
 
+bool tlv_view::verify_end() const {
+    auto ptr = this->end_-1;
+    for (int i=0; i<4; i++) {
+        if (*ptr-- != 0) return false;
+    }
+    if (*ptr != communication::TLV_TYPE::END) return false;
+    else return true;
+}
+
 /**
 * Allow to check if the tlv_view is valid.
 *
