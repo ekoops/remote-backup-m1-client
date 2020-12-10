@@ -66,7 +66,7 @@ bool f_message::next_chunk() {
         this->f_content_[i] = (to_read >> (3 - i) * 8) & 0xFF;
     }
     this->ifs_.read(reinterpret_cast<char *>(&*(this->f_content_ + 4)), to_read);
-    if (!this->ifs_) throw "Unexpected EOF";
+    if (!this->ifs_) throw boost::filesystem::filesystem_error::runtime_error {"Unexpected EOF"};
 
     if (this->completed_) {
         this->resize(this->header_size_ + 5 + this->remaining_);

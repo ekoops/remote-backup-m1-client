@@ -1,4 +1,5 @@
 #include <boost/archive/binary_oarchive.hpp>
+#include <boost/asio/bind_executor.hpp>
 #include <boost/thread.hpp>
 #include <algorithm>
 #include "connection.h"
@@ -25,8 +26,7 @@ connection::connection(boost::asio::io_context &io,
     resolver_{strand_},
     keepalive_timer_{io, boost::asio::chrono::seconds{30}} {
     this->socket_.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
-    this->socket_.set_verify_callback(boost::bind(&connection::verify_certificate, this,
-                                                  boost::placeholders::_1, boost::placeholders::_2));
+
     this->thread_pool_.reserve(thread_pool_size);
     for (int i = 0; i < thread_pool_size; i++) {
         this->thread_pool_.emplace_back(boost::bind(&boost::asio::io_context::run, &io), std::ref(io));
@@ -34,13 +34,11 @@ connection::connection(boost::asio::io_context &io,
 }
 
 
-
 void connection::resolve(std::string const &hostname, std::string const &service) {
-    try {
-        this->endpoints_ = this->resolver_.resolve(hostname, service);
-    }
-    catch (std::exception &ex) {
-        std::cerr << "Error in resolve():\n\t" << ex.what() << std::endl;
+    boost::system::error_code ec;
+    this->endpoints_ = this->resolver_.resolve(hostname, service, ec);
+    if (ec) {
+        std::cerr << "Error in resolve():\n\t" << ec.message() << std::endl;
         std::exit(EXIT_FAILURE);
     }
 }
@@ -60,12 +58,6 @@ std::shared_ptr<connection> connection::get_instance(boost::asio::io_context &io
     return std::shared_ptr<connection>(new connection{io, ctx, thread_pool_size});
 }
 
-bool connection::verify_certificate(bool preverified, ssl::verify_context &ctx) {
-    // TODO: Viene chiamata due volte... Perchè?
-    std::cout << "preverified: " << preverified << std::endl;
-    return true;
-}
-
 /**
  * Allow to establish an SSL socket connection with the specified endpoint
  *
@@ -74,27 +66,23 @@ bool connection::verify_certificate(bool preverified, ssl::verify_context &ctx) 
  * @return void
  */
 void connection::connect() {
-    bool connected = false;
-    while (!connected) {
-        try {
-            SSL_clear(this->socket_.native_handle());
-            boost::asio::connect(this->socket_.lowest_layer(), this->endpoints_);
-            this->socket_.handshake(ssl::stream<boost::asio::ip::tcp::socket>::client);
-            connected = true;
-            if (this->user_.authenticated() &&      // if user is already authenticated
-                !this->auth(this->user_) &&      // and the auth message server response is not good
-                !this->login()) {                   // and the user fails the login procedure
-                std::exit(EXIT_FAILURE);
-            }
-        }
-        catch (boost::system::system_error &ex) {
+    SSL_clear(this->socket_.native_handle());
+    boost::system::error_code ec;
+    do {
+        boost::asio::connect(this->socket_.lowest_layer(), this->endpoints_, ec);
+        if (ec) {
             std::cerr << "Failed to connect. Retrying..." << std::endl;
             std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         }
-        catch (std::exception &ex) {
-            std::cerr << "Error in connect():\n\t" << ex.what() << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
+    } while (ec);
+    this->socket_.lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
+    boost::system::error_code hec;
+    this->socket_.handshake(ssl::stream<boost::asio::ip::tcp::socket>::client, hec);
+    if (hec) std::exit(EXIT_FAILURE);
+    if (this->user_.authenticated() &&      // if user is already authenticated
+        !this->auth(this->user_) &&      // and the auth message server response is not good
+        !this->login()) {                   // and the user fails the login procedure
+        std::exit(EXIT_FAILURE);
     }
 }
 
@@ -147,48 +135,33 @@ bool connection::auth(user &usr) {
     auth_msg.add_TLV(communication::TLV_TYPE::PSWD, password.size(), password.c_str());
     auth_msg.add_TLV(communication::TLV_TYPE::END);
 
-    std::optional<communication::message> msg;
-    if (this->write(auth_msg) && (msg = this->read())) {
-        communication::tlv_view view{msg.value()};
-        if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
-            usr.authenticated(true);
-            return true;
-        } else return false;
-    }
-    return false;
+    auto response = this->sync_post(auth_msg);
+    if (!response) return false;
+    communication::tlv_view view{response.value()};
+    if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
+        usr.authenticated(true);
+        return true;
+    } else return false;
 }
 
 void connection::schedule_keepalive() {
     try {
-        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{10});
+        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
         this->keepalive_timer_.async_wait(
-                boost::bind(
-                        &connection::keepalive,
-                        this,
-                        boost::asio::placeholders::error
-                )
-        );
+                boost::asio::bind_executor(
+                this->strand_,
+                [this](boost::system::error_code const& e) {
+                    if (!e) {
+                        std::cout << "Sending keep alive message..." << std::endl;
+                        communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
+                        msg.add_TLV(communication::TLV_TYPE::END);
+                        this->write(msg);
+                    }
+                }
+        ));
     }
     catch (boost::system::system_error &e) {
         std::cerr << "Failed to set keepalive timer" << std::endl;
-    }
-}
-
-void connection::keepalive(boost::system::error_code const &e) {
-    if (!e) {
-        std::cout << "Sending keep alive message..." << std::endl;
-        communication::message msg {communication::MESSAGE_TYPE::KEEP_ALIVE};
-        msg.add_TLV(communication::TLV_TYPE::END);
-        this->post(
-                msg,
-                [this](std::optional<communication::message> const &response) {
-                    if (!response) {
-                        this->connect();
-                    }
-                }
-        );
-    } else if (e == boost::asio::error::operation_aborted) {
-        //aborted
     }
 }
 
@@ -250,6 +223,7 @@ void connection::post(const std::shared_ptr<communication::f_message> &request_m
  * @return true if the message has been written successfully, false otherwise
  */
 bool connection::write(communication::message const &request_msg) {
+    this->keepalive_timer_.cancel();
     std::cout << "START WRITE" << std::endl;
     size_t header = request_msg.raw_msg_ptr()->size();
     std::vector<boost::asio::mutable_buffer> buffers;
@@ -259,7 +233,6 @@ bool connection::write(communication::message const &request_msg) {
         std::cout << "<<<<<<<<<<REQUEST>>>>>>>>>" << std::endl;
         std::cout << "HEADER: " << header << std::endl;
         std::cout << request_msg;
-        this->keepalive_timer_.cancel();
         boost::asio::write(this->socket_, buffers);
         this->schedule_keepalive();
         return true;
@@ -267,16 +240,16 @@ bool connection::write(communication::message const &request_msg) {
     catch (boost::system::system_error &ex) {
         auto error_code = ex.code();
         if (error_code == boost::asio::error::eof ||
-            error_code == boost::asio::error::connection_reset) {
-            std::cerr << "Connection to the server has been lost. Trying to reconnect..." << std::endl;
+            error_code == boost::asio::error::connection_reset ||
+            error_code == boost::asio::error::broken_pipe) {
+            std::cerr << "WRITE: Connection to the server has been lost. Trying to reconnect..." << std::endl;
             this->connect();
-        } else {
-            std::cerr << "Failed to write message to server" << std::endl;
         }
         return false;
     }
     catch (std::exception &ex) {
         std::cerr << "Error in write():\n\t" << ex.what() << std::endl;
+        this->schedule_keepalive();
         return false;
     }
 }
@@ -322,20 +295,19 @@ std::optional<communication::message> connection::read() {
     catch (boost::system::system_error &ex) {
         auto error_code = ex.code();
         if (error_code == boost::asio::error::eof ||
-            error_code == boost::asio::error::connection_reset) {
-            std::cerr << "Connection to the server has been lost. Trying to reconnect..." << std::endl;
+            error_code == boost::asio::error::connection_reset ||
+            error_code == boost::asio::error::broken_pipe) {
+            std::cerr << "READ: Connection to the server has been lost. Trying to reconnect..." << std::endl;
             this->connect();
-        } else {
-            std::cerr << "Failed to read message from server" << std::endl;
         }
         return std::nullopt;
     }
     catch (std::exception &ex) {
         std::cerr << "Error in read():\n\t" << ex.what() << std::endl;
+        this->schedule_keepalive();
         return std::nullopt;
     }
 }
-
 
 /**
  * Allow to gracefully close server connection and

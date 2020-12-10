@@ -109,7 +109,7 @@ int main(int argc, char const *const argv[]) {
         ctx.load_verify_file("../certs/ca.pem");
         // Constructing an abstraction for handling SSL connection task
         auto connection_ptr = connection::get_instance(io_context, ctx, thread_pool_size);
-        // Constructing an abstraction for scheduling task and managing communication
+        // Constructing an abstraction for scheduling async task and managing communication
         // with server through the connection
         auto scheduler_ptr = scheduler::get_instance(io_context, watched_dir_ptr, connection_ptr, thread_pool_size);
         // Constructing an abstraction for monitoring the filesystem and scheduling
@@ -134,7 +134,6 @@ int main(int argc, char const *const argv[]) {
             std::cerr << "Authentication failed" << std::endl;
             return EXIT_FAILURE;
         }
-
         // Starting specified directory local file watching
         fw.start();
     }

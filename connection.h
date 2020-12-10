@@ -38,8 +38,6 @@ public:
 
     bool login();
 
-    void keepalive(boost::system::error_code const &e);
-
     void schedule_keepalive();
 
     std::optional<communication::message> sync_post(communication::message const &request_msg);
@@ -54,8 +52,6 @@ public:
 
 private:
     connection(boost::asio::io_context &io, boost::asio::ssl::context &ctx, size_t thread_pool_size);
-
-    bool verify_certificate(bool preverified, boost::asio::ssl::verify_context &ctx);
 
     bool auth(user &usr);
 

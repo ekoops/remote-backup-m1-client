@@ -20,7 +20,7 @@ namespace fs = boost::filesystem;
  * @return a new constructed scheduler instance
  */
 scheduler::scheduler(
-        boost::asio::io_context& io,
+        boost::asio::io_context &io,
         std::shared_ptr<directory::dir> dir_ptr,
         std::shared_ptr<connection> connection_ptr,
         size_t thread_pool_size
@@ -51,7 +51,7 @@ scheduler::scheduler(
  * @return a new constructed scheduler instance std::shared_ptr
  */
 std::shared_ptr<scheduler> scheduler::get_instance(
-        boost::asio::io_context& io,
+        boost::asio::io_context &io,
         std::shared_ptr<directory::dir> dir_ptr,
         std::shared_ptr<connection> connection_ptr,
         size_t thread_pool_size
@@ -80,7 +80,7 @@ void scheduler::handle_sync(std::optional<communication::message> const &respons
     communication::MESSAGE_TYPE s_msg_type = response_msg.msg_type();
     if (s_msg_type != communication::MESSAGE_TYPE::SYNC ||
         !s_view.next_tlv() ||
-            s_view.tlv_type() == communication::TLV_TYPE::ERROR) {
+        s_view.tlv_type() == communication::TLV_TYPE::ERROR) {
         std::cerr << "Failed to sync server state" << std::endl;
         std::exit(-1);
     }
@@ -140,10 +140,10 @@ void scheduler::handle_create(fs::path const &relative_path,
     communication::tlv_view s_view{response_msg};
     if (response_msg.msg_type() == communication::MESSAGE_TYPE::CREATE &&
         s_view.next_tlv() &&
-            s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
+        s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
         sign == std::string{s_view.cbegin(), s_view.cend()} &&
         s_view.next_tlv() &&
-            s_view.tlv_type() == communication::TLV_TYPE::OK) {
+        s_view.tlv_type() == communication::TLV_TYPE::OK) {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
     } else {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(false));
@@ -173,10 +173,10 @@ void scheduler::handle_update(fs::path const &relative_path,
     this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(
             response_msg.msg_type() == communication::MESSAGE_TYPE::UPDATE &&
             s_view.next_tlv() &&
-                    s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
+            s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
             sign == std::string{s_view.cbegin(), s_view.cend()} &&
             s_view.next_tlv() &&
-                    s_view.tlv_type() == communication::TLV_TYPE::OK
+            s_view.tlv_type() == communication::TLV_TYPE::OK
     ));
 }
 
@@ -202,10 +202,10 @@ void scheduler::handle_erase(fs::path const &relative_path,
     communication::tlv_view s_view{response_msg};
     if (response_msg.msg_type() == communication::MESSAGE_TYPE::ERASE &&
         s_view.next_tlv() &&
-            s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
+        s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
         sign == std::string{s_view.cbegin(), s_view.cend()} &&
         s_view.next_tlv() &&
-            s_view.tlv_type() == communication::TLV_TYPE::OK) {
+        s_view.tlv_type() == communication::TLV_TYPE::OK) {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(false));
     } else {
         this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(false));
@@ -255,17 +255,16 @@ void scheduler::create(fs::path const &relative_path, std::string const &digest)
 
         this->connection_ptr_->post(
                 f_msg,
-                [this, relative_path, sign](std::optional<communication::message> const &response) {
-                    // THe following completion handler must be
-                    // executed by this class threads
-                    boost::asio::post(this->io_, boost::bind(
-                            &scheduler::handle_create,
-                            this,
-                            relative_path,
-                            sign,
-                            response
-                    ));
-                }
+                boost::asio::bind_executor(
+                        this->io_,
+                        boost::bind(
+                                &scheduler::handle_create,
+                                this,
+                                relative_path,
+                                sign,
+                                boost::placeholders::_1
+                        )
+                )
         );
     });
 }
@@ -299,17 +298,16 @@ void scheduler::update(fs::path const &relative_path, std::string const &digest)
 
         this->connection_ptr_->post(
                 f_msg,
-                [this, relative_path, sign](std::optional<communication::message> const &response) {
-                    // THe following completion handler must be
-                    // executed by this class threads
-                    boost::asio::post(this->io_, boost::bind(
-                            &scheduler::handle_update,
-                            this,
-                            relative_path,
-                            sign,
-                            response
-                    ));
-                }
+                boost::asio::bind_executor(
+                        this->io_,
+                        boost::bind(
+                                &scheduler::handle_update,
+                                this,
+                                relative_path,
+                                sign,
+                                boost::placeholders::_1
+                        )
+                )
         );
     });
 }
@@ -340,17 +338,17 @@ void scheduler::erase(fs::path const &relative_path, std::string const &digest) 
         request_msg.add_TLV(communication::TLV_TYPE::END);
         this->connection_ptr_->post(
                 request_msg,
-                [this, relative_path, sign](std::optional<communication::message> const &response) {
-                    // THe following completion handler must be
-                    // executed by this class threads
-                    boost::asio::post(this->io_, boost::bind(
-                            &scheduler::handle_erase,
-                            this,
-                            relative_path,
-                            sign,
-                            response
-                    ));
-                });
+                boost::asio::bind_executor(
+                        this->io_,
+                        boost::bind(
+                                &scheduler::handle_erase,
+                                this,
+                                relative_path,
+                                sign,
+                                boost::placeholders::_1
+                        )
+                )
+        );
     });
 }
 

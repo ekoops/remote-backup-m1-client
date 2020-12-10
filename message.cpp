@@ -42,11 +42,6 @@ void message::add_TLV(TLV_TYPE tlv_type, size_t length, char const *buffer) {
     }
 }
 
-void message::add_TLV(std::vector<uint8_t> const& tlv_vector) {
-    this->raw_msg_ptr_->reserve(this->raw_msg_ptr_->size() + tlv_vector.size());
-    this->raw_msg_ptr_->insert(this->raw_msg_ptr_->end(), tlv_vector.cbegin(), tlv_vector.cend());
-}
-
 /**
 * Getter for the internal message representation pointer.
 *
