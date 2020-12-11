@@ -7,10 +7,10 @@ namespace fs = boost::filesystem;
 
 /**
  * Construct a file_watcher instance with the associated watched directory
- * and a scheduler for server update scheduling
+ * and a bind_scheduler for server update scheduling
  *
  * @param dir_ptr std::shared_ptr to the watched directory
- * @param scheduler_ptr std::shared_ptr to an operation scheduler
+ * @param scheduler_ptr std::shared_ptr to an operation bind_scheduler
  * @param wait_time file_watcher refresh rate in milliseconds
  * @return a new constructed file_watcher instance
  */
@@ -42,7 +42,6 @@ void file_watcher::start() {
     fs::path const &root = this->dir_ptr_->path();
     size_t watched_dir_length = root.size();
 
-    // Syncing with backup server directory
     this->scheduler_ptr_->sync();
 
     while (this->running()) {

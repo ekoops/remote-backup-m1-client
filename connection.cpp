@@ -1,7 +1,7 @@
-#include <boost/archive/binary_oarchive.hpp>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/thread.hpp>
 #include <algorithm>
+#include <utility>
 #include "connection.h"
 #include "f_message.h"
 #include "tlv_view.h"
@@ -33,6 +33,18 @@ connection::connection(boost::asio::io_context &io,
     }
 }
 
+void connection::set_scheduler(const std::shared_ptr<scheduler> &scheduler_ptr) {
+    this->scheduler_ptr_ = scheduler_ptr;
+}
+
+void connection::set_user(user usr) {
+    this->user_ = std::move(usr);
+}
+
+void connection::cancel_keepalive() {
+    boost::system::error_code ec;
+    this->keepalive_timer_.cancel(ec);
+}
 
 void connection::resolve(std::string const &hostname, std::string const &service) {
     boost::system::error_code ec;
@@ -52,9 +64,11 @@ void connection::resolve(std::string const &hostname, std::string const &service
  * @param thread_pool_size the number of threads inside the thread pool
  * @return a new constructed connection instance std::shared_ptr
  */
-std::shared_ptr<connection> connection::get_instance(boost::asio::io_context &io,
-                                                     ssl::context &ctx,
-                                                     size_t thread_pool_size) {
+std::shared_ptr<connection> connection::get_instance(
+        boost::asio::io_context &io,
+        ssl::context &ctx,
+        size_t thread_pool_size
+) {
     return std::shared_ptr<connection>(new connection{io, ctx, thread_pool_size});
 }
 
@@ -79,86 +93,33 @@ void connection::connect() {
     boost::system::error_code hec;
     this->socket_.handshake(ssl::stream<boost::asio::ip::tcp::socket>::client, hec);
     if (hec) std::exit(EXIT_FAILURE);
-    if (this->user_.authenticated() &&      // if user is already authenticated
-        !this->auth(this->user_) &&      // and the auth message server response is not good
-        !this->login()) {                   // and the user fails the login procedure
-        std::exit(EXIT_FAILURE);
+
+    if (this->scheduler_ptr_.expired()) std::exit(EXIT_FAILURE);
+    auto scheduler_ptr = this->scheduler_ptr_.lock();
+    if (this->user_.authenticated()) {
+        if (!scheduler_ptr->auth(this->user_) && !scheduler_ptr->login()) {
+            std::exit(EXIT_FAILURE);
+        }
+        scheduler_ptr->sync();
     }
 }
 
-bool connection::login() {
-    std::string username, password;
-//    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
-//    boost::regex password_regex{"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
-    boost::regex username_regex{".*"};
-    boost::regex password_regex{".*"};
-    int field_attempts = 3;
-    int general_attempts = 3;
-
-    while (general_attempts) {
-        std::cout << "Insert your username:" << std::endl;
-        while (!(std::cin >> username) || !boost::regex_match(username, username_regex)) {
-            std::cin.clear();
-            std::cout << "Failed to get username. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
-            if (!field_attempts) return false;
-        }
-        field_attempts = 0;
-        std::cout << "Insert your password:" << std::endl;
-        while (!(std::cin >> password) || !boost::regex_match(password, password_regex)) {
-            std::cin.clear();
-            std::cout << "Failed to get password. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
-            if (!field_attempts) return false;
-        }
-        user usr{username, password};
-        if (this->auth(usr)) {
-            this->user_ = usr;
-            return true;
-        } else std::cout << "Authentication failed (attempts left " << --general_attempts << ")." << std::endl;
-    }
-    return false;
-}
-
-/**
- * Allow to try to authenticate client user
- *
- * @param username the client user username
- * @param password the client user password
- * @return true if the user has been successfully authenticated, false otherwise
- */
-bool connection::auth(user &usr) {
-    std::string const &username = usr.username();
-    std::string const &password = usr.password();
-    communication::message auth_msg{communication::MESSAGE_TYPE::AUTH};
-    auth_msg.add_TLV(communication::TLV_TYPE::USRN, username.size(), username.c_str());
-    auth_msg.add_TLV(communication::TLV_TYPE::PSWD, password.size(), password.c_str());
-    auth_msg.add_TLV(communication::TLV_TYPE::END);
-
-    auto response = this->sync_post(auth_msg);
-    if (!response) return false;
-    communication::tlv_view view{response.value()};
-    if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
-        usr.authenticated(true);
-        return true;
-    } else return false;
-}
 
 void connection::schedule_keepalive() {
     try {
         this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
         this->keepalive_timer_.async_wait(
                 boost::asio::bind_executor(
-                this->strand_,
-                [this](boost::system::error_code const& e) {
-                    if (!e) {
-                        std::cout << "Sending keep alive message..." << std::endl;
-                        communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
-                        msg.add_TLV(communication::TLV_TYPE::END);
-                        this->write(msg);
-                    }
-                }
-        ));
+                        this->strand_,
+                        [this](boost::system::error_code const &e) {
+                            if (!e) {
+                                std::cout << "Sending keep alive message..." << std::endl;
+                                communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
+                                msg.add_TLV(communication::TLV_TYPE::END);
+                                this->sync_post(msg);
+                            }
+                        }
+                ));
     }
     catch (boost::system::system_error &e) {
         std::cerr << "Failed to set keepalive timer" << std::endl;

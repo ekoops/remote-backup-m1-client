@@ -1,7 +1,3 @@
-//
-// Created by leonardo on 08/12/20.
-//
-
 #ifndef REMOTE_BACKUP_M1_CLIENT_USER_H
 #define REMOTE_BACKUP_M1_CLIENT_USER_H
 #include <string>

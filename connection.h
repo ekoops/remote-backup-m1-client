@@ -1,3 +1,4 @@
+class scheduler;
 #ifndef REMOTE_BACKUP_M1_CLIENT_CONNECTION_H
 #define REMOTE_BACKUP_M1_CLIENT_CONNECTION_H
 
@@ -12,6 +13,7 @@
 #include "f_message.h"
 #include "message.h"
 #include "user.h"
+#include "scheduler.h"
 
 class connection {
     // needed for isolated completion handler execution
@@ -23,6 +25,7 @@ class connection {
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
     boost::asio::steady_timer keepalive_timer_;
+    std::weak_ptr<scheduler> scheduler_ptr_;
     user user_;
 
 public:
@@ -36,11 +39,10 @@ public:
 
     void connect();
 
-    bool login();
-
     void schedule_keepalive();
+    void cancel_keepalive();
 
-    std::optional<communication::message> sync_post(communication::message const &request_msg);
+        std::optional<communication::message> sync_post(communication::message const &request_msg);
 
     void post(communication::message const &request_msg,
               std::function<void(std::optional<communication::message> const &)> const &fn);
@@ -50,10 +52,15 @@ public:
 
     void close();
 
-private:
-    connection(boost::asio::io_context &io, boost::asio::ssl::context &ctx, size_t thread_pool_size);
+    void set_scheduler(const std::shared_ptr<scheduler> &scheduler_ptr);
+    void set_user(user usr);
 
-    bool auth(user &usr);
+        private:
+    connection(
+            boost::asio::io_context &io,
+            boost::asio::ssl::context &ctx,
+            size_t thread_pool_size
+    );
 
     bool write(communication::message const &request_msg);
 

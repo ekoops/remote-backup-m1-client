@@ -1,8 +1,6 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/asio.hpp>
-#include <boost/regex.hpp>
 #include <boost/bind/bind.hpp>
 #include "file_watcher.h"
 #include "message.h"
@@ -58,20 +56,22 @@ po::variables_map parse_options(int argc, char const *const argv[]) {
 
         po::notify(vm);
 
+
         // canonical returns the absolute path resolving symbolic link, dot and dot-dot
         // it also checks the existence
         vm.at("path-to-watch").value() = fs::canonical(vm["path-to-watch"].as<fs::path>());
-        auto path_to_watch = vm["path-to-watch"];
-        if (path_to_watch.defaulted()) {
-            std::cout << "--path-to-watch option set to default value: "
-                      << path_to_watch.as<fs::path>() << std::endl;
-        } else {
-            auto dir = path_to_watch.as<fs::path>();
-            if (!fs::is_directory(dir)) {
-                std::cerr << dir << " is not a directory" << std::endl;
-                std::exit(EXIT_FAILURE);
-            }
+        auto watched_dir = vm["path-to-watch"];
+        auto watched_dir_path = watched_dir.as<fs::path>();
+        if (!fs::is_directory(watched_dir_path)) {
+            std::cerr << watched_dir_path.generic_path().string() << " is not a directory" << std::endl;
+            std::exit(EXIT_FAILURE);
         }
+        if (watched_dir.defaulted()) {
+            std::cout << "--path-to-watch option set to default value: "
+                      << watched_dir_path.generic_path().string() << std::endl;
+        }
+
+
         if (vm["threads"].defaulted()) {
             std::cout << "--threads option set to default value: "
                       << vm["threads"].as<size_t>() << std::endl;
@@ -102,7 +102,6 @@ int main(int argc, char const *const argv[]) {
 
         // Constructing an abstraction for the watched directory
         auto watched_dir_ptr = directory::dir::get_instance(path_to_watch, true);
-
         boost::asio::io_context io_context;
         // Allowing generic SSL/TLS version
         boost::asio::ssl::context ctx{boost::asio::ssl::context::sslv23};
@@ -112,8 +111,9 @@ int main(int argc, char const *const argv[]) {
         // Constructing an abstraction for scheduling async task and managing communication
         // with server through the connection
         auto scheduler_ptr = scheduler::get_instance(io_context, watched_dir_ptr, connection_ptr, thread_pool_size);
+        connection_ptr->set_scheduler(scheduler_ptr);
         // Constructing an abstraction for monitoring the filesystem and scheduling
-        // server synchronizations through scheduler
+        // server synchronizations through bind_scheduler
         file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
 
 //        // Setting callback to handle process signals
@@ -130,7 +130,7 @@ int main(int argc, char const *const argv[]) {
         connection_ptr->resolve(hostname, service);
         connection_ptr->connect();
         // Starting login procedure
-        if (!connection_ptr->login()) {
+        if (!scheduler_ptr->login()) {
             std::cerr << "Authentication failed" << std::endl;
             return EXIT_FAILURE;
         }

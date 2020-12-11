@@ -15,7 +15,7 @@
 /**
  * This class allow to create a file_watcher given a specific
  * directory. If a specific resource is not synced, this class
- * uses the associated scheduler to schedule the appropriate
+ * uses the associated bind_scheduler to schedule the appropriate
  * operation.
  */
 class file_watcher {

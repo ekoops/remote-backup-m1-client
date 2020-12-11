@@ -1,3 +1,4 @@
+class connection;
 #ifndef REMOTE_BACKUP_M1_CLIENT_SCHEDULER_H
 #define REMOTE_BACKUP_M1_CLIENT_SCHEDULER_H
 
@@ -9,6 +10,7 @@
  * This class allows to schedule operation based
  * on server communication
  */
+
 class scheduler {
     std::shared_ptr<connection> connection_ptr_;
     std::shared_ptr<directory::dir> dir_ptr_;
@@ -23,8 +25,6 @@ class scheduler {
             std::shared_ptr<connection> connection_ptr,
             size_t thread_pool_size
     );
-
-    void handle_sync(std::optional<communication::message> const &response);
 
     void handle_create(boost::filesystem::path const &relative_path,
                        std::string const &sign,
@@ -46,6 +46,10 @@ public:
             size_t thread_pool_size
     );
 
+    bool login();
+
+    bool auth(user &usr);
+
     void sync();
 
     void create(boost::filesystem::path const &relative_path, std::string const &digest);
@@ -53,6 +57,7 @@ public:
     void update(boost::filesystem::path const &relative_path, std::string const &digest);
 
     void erase(boost::filesystem::path const &relative_path, std::string const &digest);
+
 
     void close();
 };

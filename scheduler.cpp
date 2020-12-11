@@ -8,8 +8,8 @@
 namespace fs = boost::filesystem;
 
 /**
- * Construct a scheduler instance for a given watched directory.
- * The scheduler instance will use the connection abstraction
+ * Construct a bind_scheduler instance for a given watched directory.
+ * The bind_scheduler instance will use the connection abstraction
  * to communicate with the server and a thread pool for constructing
  * in parallel multiple request message
  *
@@ -17,7 +17,7 @@ namespace fs = boost::filesystem;
  * @param dir_ptr the watched directory std::shared_ptr
  * @param connection_ptr the connection std::shared_ptr
  * @param thread_pool_size the thread pool size
- * @return a new constructed scheduler instance
+ * @return a new constructed bind_scheduler instance
  */
 scheduler::scheduler(
         boost::asio::io_context &io,
@@ -39,8 +39,8 @@ scheduler::scheduler(
 }
 
 /**
- * Construct a scheduler instance std::shared_ptr for a given watched directory.
- * The scheduler instance will use the connection abstraction
+ * Construct a bind_scheduler instance std::shared_ptr for a given watched directory.
+ * The bind_scheduler instance will use the connection abstraction
  * to communicate with the server and a thread pool for constructing
  * in parallel multiple request message
  *
@@ -48,7 +48,7 @@ scheduler::scheduler(
  * @param dir_ptr the watched directory std::shared_ptr
  * @param connection_ptr the connection std::shared_ptr
  * @param thread_pool_size the thread pool size
- * @return a new constructed scheduler instance std::shared_ptr
+ * @return a new constructed bind_scheduler instance std::shared_ptr
  */
 std::shared_ptr<scheduler> scheduler::get_instance(
         boost::asio::io_context &io,
@@ -61,59 +61,6 @@ std::shared_ptr<scheduler> scheduler::get_instance(
             std::move(dir_ptr),
             std::move(connection_ptr),
             thread_pool_size
-    });
-}
-
-
-/**
- * Allow to handle SYNC message server response
- *
- * @param response an optional containing the eventual server response
- * @return void
- */
-void scheduler::handle_sync(std::optional<communication::message> const &response) {
-    if (!response) std::exit(EXIT_FAILURE);
-
-    communication::message const &response_msg = response.value();
-
-    communication::tlv_view s_view{response_msg};
-    communication::MESSAGE_TYPE s_msg_type = response_msg.msg_type();
-    if (s_msg_type != communication::MESSAGE_TYPE::SYNC ||
-        !s_view.next_tlv() ||
-        s_view.tlv_type() == communication::TLV_TYPE::ERROR) {
-        std::cerr << "Failed to sync server state" << std::endl;
-        std::exit(-1);
-    }
-
-    auto s_dir_ptr = directory::dir::get_instance("S_DIR");
-
-    // Checking for server elements that should be deleted or updated
-    do {
-        if (s_view.tlv_type() == communication::TLV_TYPE::ITEM) {
-            std::string s_sign{s_view.cbegin(), s_view.cend()};
-            auto splitted_sign = tools::split_sign(s_sign);
-            fs::path const &relative_path = splitted_sign.first;
-            std::string digest = splitted_sign.second;
-            s_dir_ptr->insert_or_assign(relative_path, directory::resource{
-                    boost::indeterminate, // unused field for server dir
-                    true,   // unused field for server dir
-                    digest
-            });
-            if (!this->dir_ptr_->contains(relative_path)) {
-                this->erase(relative_path, digest);
-            } else {
-                auto rsrc = this->dir_ptr_->rsrc(relative_path).value();
-                if (rsrc.digest() != digest) this->update(relative_path, digest);
-                else this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
-            }
-        }
-    } while (s_view.next_tlv());
-
-    // Checking for server elements that should be created
-    this->dir_ptr_->for_each([this, &s_dir_ptr](std::pair<fs::path, directory::resource> const &pair) {
-        if (!s_dir_ptr->contains(pair.first)) {
-            this->create(pair.first, pair.second.digest());
-        }
     });
 }
 
@@ -212,6 +159,67 @@ void scheduler::handle_erase(fs::path const &relative_path,
     }
 }
 
+bool scheduler::login() {
+    std::string username, password;
+//    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
+//    boost::regex password_regex{"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
+    boost::regex username_regex{".*"};
+    boost::regex password_regex{".*"};
+    int field_attempts = 3;
+    int general_attempts = 3;
+
+    while (general_attempts) {
+        std::cout << "Insert your username:" << std::endl;
+        while (!(std::cin >> username) || !boost::regex_match(username, username_regex)) {
+            std::cin.clear();
+            std::cout << "Failed to get username. Try again (attempts left " << --field_attempts << ")."
+                      << std::endl;
+            if (!field_attempts) return false;
+        }
+        field_attempts = 0;
+        std::cout << "Insert your password:" << std::endl;
+        while (!(std::cin >> password) || !boost::regex_match(password, password_regex)) {
+            std::cin.clear();
+            std::cout << "Failed to get password. Try again (attempts left " << --field_attempts << ")."
+                      << std::endl;
+            if (!field_attempts) return false;
+        }
+        user usr{username, password};
+        if (this->auth(usr)) {
+            this->connection_ptr_->set_user(usr);
+            return true;
+        } else {
+            this->connection_ptr_->cancel_keepalive();
+            std::cout << "Authentication failed (attempts left " << --general_attempts << ")." << std::endl;
+        }
+    }
+    return false;
+}
+
+/**
+ * Allow to try to authenticate client user
+ *
+ * @param username the client user username
+ * @param password the client user password
+ * @return true if the user has been successfully authenticated, false otherwise
+ */
+bool scheduler::auth(user &usr) {
+    std::string const &username = usr.username();
+    std::string const &password = usr.password();
+    communication::message auth_msg{communication::MESSAGE_TYPE::AUTH};
+    auth_msg.add_TLV(communication::TLV_TYPE::USRN, username.size(), username.c_str());
+    auth_msg.add_TLV(communication::TLV_TYPE::PSWD, password.size(), password.c_str());
+    auth_msg.add_TLV(communication::TLV_TYPE::END);
+
+    auto response = this->connection_ptr_->sync_post(auth_msg);
+    if (!response) return false;
+    communication::tlv_view view{response.value()};
+    if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
+        usr.authenticated(true);
+        return true;
+    } else return false;
+}
+
 /**
  * Allow to schedule a SYNC operation through the associated connection
  *
@@ -223,7 +231,49 @@ void scheduler::sync() {
     std::cout << "Scheduling SYNC..." << std::endl;
 
     auto response = this->connection_ptr_->sync_post(request_msg);
-    this->handle_sync(response);
+    if (!response) std::exit(EXIT_FAILURE);
+
+    communication::message const &response_msg = response.value();
+
+    communication::tlv_view s_view{response_msg};
+    communication::MESSAGE_TYPE s_msg_type = response_msg.msg_type();
+    if (s_msg_type != communication::MESSAGE_TYPE::SYNC ||
+        !s_view.next_tlv() ||
+        s_view.tlv_type() == communication::TLV_TYPE::ERROR) {
+        std::cerr << "Failed to sync server state" << std::endl;
+        std::exit(-1);
+    }
+
+    auto s_dir_ptr = directory::dir::get_instance("S_DIR");
+
+    // Checking for server elements that should be deleted or updated
+    do {
+        if (s_view.tlv_type() == communication::TLV_TYPE::ITEM) {
+            std::string s_sign{s_view.cbegin(), s_view.cend()};
+            auto splitted_sign = tools::split_sign(s_sign);
+            fs::path const &relative_path = splitted_sign.first;
+            std::string digest = splitted_sign.second;
+            s_dir_ptr->insert_or_assign(relative_path, directory::resource{
+                    boost::indeterminate, // unused field for server dir
+                    true,   // unused field for server dir
+                    digest
+            });
+            if (!this->dir_ptr_->contains(relative_path)) {
+                this->erase(relative_path, digest);
+            } else {
+                auto rsrc = this->dir_ptr_->rsrc(relative_path).value();
+                if (rsrc.digest() != digest) this->update(relative_path, digest);
+                else this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
+            }
+        }
+    } while (s_view.next_tlv());
+
+    // Checking for server elements that should be created
+    this->dir_ptr_->for_each([this, &s_dir_ptr](std::pair<fs::path, directory::resource> const &pair) {
+        if (!s_dir_ptr->contains(pair.first)) {
+            this->create(pair.first, pair.second.digest());
+        }
+    });
 }
 
 /**
