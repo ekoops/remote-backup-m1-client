@@ -33,17 +33,31 @@ connection::connection(boost::asio::io_context &io,
     }
 }
 
-void connection::set_scheduler(const std::shared_ptr<scheduler> &scheduler_ptr) {
-    this->scheduler_ptr_ = scheduler_ptr;
-}
-
-void connection::set_user(user usr) {
-    this->user_ = std::move(usr);
-}
-
 void connection::cancel_keepalive() {
     boost::system::error_code ec;
     this->keepalive_timer_.cancel(ec);
+}
+
+void connection::schedule_keepalive() {
+    try {
+        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
+        this->keepalive_timer_.async_wait(
+                boost::asio::bind_executor(
+                        this->strand_,
+                        [this](boost::system::error_code const &e) {
+                            if (!e) {
+                                std::cout << "Sending keep alive message..." << std::endl;
+                                communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
+                                msg.add_TLV(communication::TLV_TYPE::END);
+                                auto result = this->sync_post(msg);
+
+                            }
+                        }
+                ));
+    }
+    catch (boost::system::system_error &e) {
+        std::cerr << "Failed to set keepalive timer" << std::endl;
+    }
 }
 
 void connection::resolve(std::string const &hostname, std::string const &service) {
@@ -89,49 +103,22 @@ void connection::connect() {
             std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         }
     } while (ec);
+
     this->socket_.lowest_layer().set_option(boost::asio::socket_base::keep_alive(true));
     boost::system::error_code hec;
     this->socket_.handshake(ssl::stream<boost::asio::ip::tcp::socket>::client, hec);
     if (hec) std::exit(EXIT_FAILURE);
-
-    if (this->scheduler_ptr_.expired()) std::exit(EXIT_FAILURE);
-    auto scheduler_ptr = this->scheduler_ptr_.lock();
-    if (this->user_.authenticated()) {
-        if (!scheduler_ptr->auth(this->user_) && !scheduler_ptr->login()) {
-            std::exit(EXIT_FAILURE);
-        }
-        scheduler_ptr->sync();
-    }
 }
 
 
-void connection::schedule_keepalive() {
-    try {
-        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
-        this->keepalive_timer_.async_wait(
-                boost::asio::bind_executor(
-                        this->strand_,
-                        [this](boost::system::error_code const &e) {
-                            if (!e) {
-                                std::cout << "Sending keep alive message..." << std::endl;
-                                communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
-                                msg.add_TLV(communication::TLV_TYPE::END);
-                                this->sync_post(msg);
-                            }
-                        }
-                ));
-    }
-    catch (boost::system::system_error &e) {
-        std::cerr << "Failed to set keepalive timer" << std::endl;
-    }
-}
-
-std::optional<communication::message> connection::sync_post(
+std::pair<boost::logic::tribool, std::optional<communication::message>> connection::sync_post(
         communication::message const &request_msg
 ) {
-    return this->write(request_msg) ? this->read() : std::nullopt;
+    std::pair<boost::logic::tribool, std::optional<communication::message>> result;
+    result.first = this->write(request_msg);
+    if (boost::indeterminate(result.first) || !result.first) return result;
+    return this->read();
 }
-
 
 /**
  * Allow to send a message and handle server response using
@@ -146,7 +133,17 @@ void connection::post(
         std::function<void(std::optional<communication::message> const &)> const &fn
 ) {
     boost::asio::post(this->strand_, [this, request_msg, fn]() {
-        fn(sync_post(request_msg));
+        std::pair<boost::logic::tribool, std::optional<communication::message>> result;
+        result.first = this->write(request_msg);
+        if (boost::indeterminate(result.first)) {
+            this->handle_reconnection_();
+        }
+        if (boost::indeterminate(result.first) || !result.first) return fn(result.second);
+        result = this->read();
+        if (boost::indeterminate(result.first)) {
+            this->handle_reconnection_();
+        }
+        if (boost::indeterminate(result.first) || !result.first) return fn(result.second);
     });
 }
 
@@ -159,17 +156,27 @@ void connection::post(
  * @param fn callback for handling server response
  * @return void
  */
-void connection::post(const std::shared_ptr<communication::f_message> &request_msg,
-                      std::function<void(std::optional<communication::message> const &)> const &fn) {
+void connection::post(
+        std::shared_ptr<communication::f_message> const &request_msg,
+        std::function<void(std::optional<communication::message> const &)> const &fn
+) {
     boost::asio::post(this->strand_, [this, request_msg, fn]() {
         std::optional<communication::message> msg;
         try {
+            std::pair<boost::logic::tribool, std::optional<communication::message>> result;
             while (request_msg->next_chunk()) {
-                if (!this->write(*request_msg) || !(msg = this->read())) {
-                    fn(std::nullopt);
+                result.first = this->write(*request_msg);
+                if (boost::indeterminate(result.first)) {
+                    this->handle_reconnection_();
                 }
+                if (boost::indeterminate(result.first) || !result.first) return fn(result.second);
+                result = this->read();
+                if (boost::indeterminate(result.first)) {
+                    this->handle_reconnection_();
+                }
+                if (boost::indeterminate(result.first) || !result.first) return fn(result.second);
             }
-            fn(msg);
+            fn(result.second);
         }
         catch (std::exception &e) {
             fn(std::nullopt);
@@ -183,7 +190,7 @@ void connection::post(const std::shared_ptr<communication::f_message> &request_m
  * @param request_msg message that has to be sent
  * @return true if the message has been written successfully, false otherwise
  */
-bool connection::write(communication::message const &request_msg) {
+boost::logic::tribool connection::write(communication::message const &request_msg) {
     this->keepalive_timer_.cancel();
     std::cout << "START WRITE" << std::endl;
     size_t header = request_msg.raw_msg_ptr()->size();
@@ -204,7 +211,7 @@ bool connection::write(communication::message const &request_msg) {
             error_code == boost::asio::error::connection_reset ||
             error_code == boost::asio::error::broken_pipe) {
             std::cerr << "WRITE: Connection to the server has been lost. Trying to reconnect..." << std::endl;
-            this->connect();
+            return boost::indeterminate; // indicate failed connection
         }
         return false;
     }
@@ -221,7 +228,10 @@ bool connection::write(communication::message const &request_msg) {
  * @return an std::optional<communication::message> if a message has been read successfully,
  * true if the message has been written successfully, std::nullopt otherwise
  */
-std::optional<communication::message> connection::read() {
+// (true, std::optional<message>)
+// (false, std::nullopt)
+// (indeterminate, std::nullopt) // failed connection
+std::pair<boost::logic::tribool, std::optional<communication::message>> connection::read() {
     std::cout << "START READ" << std::endl;
     size_t header = 0;
     auto raw_msg_ptr = std::make_shared<std::vector<uint8_t>>();
@@ -251,7 +261,7 @@ std::optional<communication::message> connection::read() {
         std::cout << "<<<<<<<<<<RESPONSE>>>>>>>>>" << std::endl;
         std::cout << "HEADER: " << response_msg.size() << std::endl;
         std::cout << response_msg;
-        return std::make_optional<communication::message>(raw_msg_ptr);
+        return {true, std::make_optional<communication::message>(raw_msg_ptr)};
     }
     catch (boost::system::system_error &ex) {
         auto error_code = ex.code();
@@ -259,14 +269,14 @@ std::optional<communication::message> connection::read() {
             error_code == boost::asio::error::connection_reset ||
             error_code == boost::asio::error::broken_pipe) {
             std::cerr << "READ: Connection to the server has been lost. Trying to reconnect..." << std::endl;
-            this->connect();
+            return {boost::indeterminate, std::nullopt};
         }
-        return std::nullopt;
+        return {false, std::nullopt};
     }
     catch (std::exception &ex) {
         std::cerr << "Error in read():\n\t" << ex.what() << std::endl;
         this->schedule_keepalive();
-        return std::nullopt;
+        return {false, std::nullopt};
     }
 }
 

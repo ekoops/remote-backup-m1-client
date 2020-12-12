@@ -64,6 +64,25 @@ std::shared_ptr<scheduler> scheduler::get_instance(
     });
 }
 
+
+/* La riconnessione avviene in due contesti:
+ * quando scade quando scade il timer o quando fallisce una write o una read.
+ * Visto che anche alla scadenza del timer quello che innesca la
+ * riconnessione è una write, si deve fare in modo che il codice che
+ * nasconde la write all'interno di connection (post e sync_post)
+ * eseguano come callback una funzione di scheduler SEMPRE sul
+ * thread in corso di connection.
+ * */
+void scheduler::reconnect() {
+    this->connection_ptr_->connect();
+    if (this->user_.authenticated()) {
+        if (!this->auth(this->user_) && !this->login()) {
+            std::exit(EXIT_FAILURE);
+        }
+        this->sync();
+    }
+}
+
 /**
  * Allow to handle CREATE message server response
  *
@@ -72,9 +91,11 @@ std::shared_ptr<scheduler> scheduler::get_instance(
  * @param response an optional containing the eventual server response
  * @return void
  */
-void scheduler::handle_create(fs::path const &relative_path,
-                              std::string const &sign,
-                              std::optional<communication::message> const &response) {
+void scheduler::handle_create(
+        fs::path const &relative_path,
+        std::string const &sign,
+        std::optional<communication::message> const &response
+) {
     auto rsrc_opt = this->dir_ptr_->rsrc(relative_path);
     if (!rsrc_opt) std::exit(EXIT_FAILURE);
     directory::resource rsrc = rsrc_opt.value();
@@ -105,9 +126,11 @@ void scheduler::handle_create(fs::path const &relative_path,
  * @param response an optional containing the eventual server response
  * @return void
  */
-void scheduler::handle_update(fs::path const &relative_path,
-                              std::string const &sign,
-                              std::optional<communication::message> const &response) {
+void scheduler::handle_update(
+        fs::path const &relative_path,
+        std::string const &sign,
+        std::optional<communication::message> const &response
+) {
     auto rsrc_opt = this->dir_ptr_->rsrc(relative_path);
     if (!rsrc_opt) std::exit(EXIT_FAILURE);
     directory::resource rsrc = rsrc_opt.value();
@@ -135,9 +158,11 @@ void scheduler::handle_update(fs::path const &relative_path,
  * @param response an optional containing the eventual server response
  * @return void
  */
-void scheduler::handle_erase(fs::path const &relative_path,
-                             std::string const &sign,
-                             std::optional<communication::message> const &response) {
+void scheduler::handle_erase(
+        fs::path const &relative_path,
+        std::string const &sign,
+        std::optional<communication::message> const &response
+) {
     auto rsrc_opt = this->dir_ptr_->rsrc(relative_path);
     if (!rsrc_opt) std::exit(EXIT_FAILURE);
     directory::resource rsrc = rsrc_opt.value();
@@ -161,32 +186,31 @@ void scheduler::handle_erase(fs::path const &relative_path,
 
 bool scheduler::login() {
     std::string username, password;
-//    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
-//    boost::regex password_regex{"[a-zA-Z0-9\\d\\-\\.@$!%*?&]{8, 16}"};
-    boost::regex username_regex{".*"};
-    boost::regex password_regex{".*"};
-    int field_attempts = 3;
+    boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
+    boost::regex password_regex{"[a-zA-Z\\d\\-\\.@$!%*?&]{8, 16}"};
     int general_attempts = 3;
+    int field_attempts;
 
     while (general_attempts) {
+        field_attempts = 3;
         std::cout << "Insert your username:" << std::endl;
         while (!(std::cin >> username) || !boost::regex_match(username, username_regex)) {
             std::cin.clear();
-            std::cout << "Failed to get username. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
+            std::cout << "Failed to get username. Try again (attempts left "
+                << --field_attempts << ")." << std::endl;
             if (!field_attempts) return false;
         }
-        field_attempts = 0;
+        field_attempts = 3;
         std::cout << "Insert your password:" << std::endl;
         while (!(std::cin >> password) || !boost::regex_match(password, password_regex)) {
             std::cin.clear();
-            std::cout << "Failed to get password. Try again (attempts left " << --field_attempts << ")."
-                      << std::endl;
+            std::cout << "Failed to get password. Try again (attempts left "
+                << --field_attempts << ")." << std::endl;
             if (!field_attempts) return false;
         }
         user usr{username, password};
         if (this->auth(usr)) {
-            this->connection_ptr_->set_user(usr);
+            this->user_ = usr;
             return true;
         } else {
             this->connection_ptr_->cancel_keepalive();
@@ -212,12 +236,19 @@ bool scheduler::auth(user &usr) {
     auth_msg.add_TLV(communication::TLV_TYPE::END);
 
     auto response = this->connection_ptr_->sync_post(auth_msg);
-    if (!response) return false;
-    communication::tlv_view view{response.value()};
-    if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
-        usr.authenticated(true);
-        return true;
-    } else return false;
+    if (boost::indeterminate(response.first)) {
+        std::cerr << "Connection has been lost during authentication" << std::endl;
+        std::exit(EXIT_FAILURE);
+    } else if (response.first == false) return false; // response not obtained
+    else {  // response obtained
+        auto response_msg = response.second.value();
+        communication::tlv_view view{response_msg};
+        if (view.next_tlv() && view.tlv_type() == communication::TLV_TYPE::OK) {
+            usr.authenticated(true);
+            return true;
+        } else return false;
+    }
+
 }
 
 /**
@@ -231,9 +262,11 @@ void scheduler::sync() {
     std::cout << "Scheduling SYNC..." << std::endl;
 
     auto response = this->connection_ptr_->sync_post(request_msg);
-    if (!response) std::exit(EXIT_FAILURE);
+    if (boost::indeterminate(response.first)) {
+        return this->reconnect();
+    } else if (response.first == false) std::exit(EXIT_FAILURE); // response not obtained
 
-    communication::message const &response_msg = response.value();
+    auto response_msg = response.second.value();
 
     communication::tlv_view s_view{response_msg};
     communication::MESSAGE_TYPE s_msg_type = response_msg.msg_type();

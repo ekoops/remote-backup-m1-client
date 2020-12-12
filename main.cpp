@@ -9,19 +9,20 @@
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
-void terminate(
-        boost::asio::io_context &io,
-        file_watcher &fw,
-        std::shared_ptr<scheduler> const &scheduler_ptr,
-        std::shared_ptr<connection> const &connection_ptr
-) {
-    std::cout << "Terminating..." << std::endl;
-//    io.stop();
-//    fw.stop();
-//    scheduler_ptr->close();
-//    connection_ptr->close();
-    std::cout << "SCIACCA" << std::endl;
-}
+
+//void terminate(
+//        boost::asio::io_context &io,
+//        file_watcher &fw,
+//        std::shared_ptr<scheduler> const &scheduler_ptr,
+//        std::shared_ptr<connection> const &connection_ptr
+//) {
+//    std::cout << "Terminating..." << std::endl;
+////    io.stop();
+////    fw.stop();
+////    scheduler_ptr->close();
+////    connection_ptr->close();
+//    std::cout << "SCIACCA" << std::endl;
+//}
 
 po::variables_map parse_options(int argc, char const *const argv[]) {
     try {
@@ -111,11 +112,17 @@ int main(int argc, char const *const argv[]) {
         // Constructing an abstraction for scheduling async task and managing communication
         // with server through the connection
         auto scheduler_ptr = scheduler::get_instance(io_context, watched_dir_ptr, connection_ptr, thread_pool_size);
-        connection_ptr->set_scheduler(scheduler_ptr);
         // Constructing an abstraction for monitoring the filesystem and scheduling
         // server synchronizations through bind_scheduler
         file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
-
+//
+//        connection_ptr->set_reconnection_handler([scheduler_ptr](){
+////            boost::bind(&scheduler::reconnect, *scheduler_ptr));
+//            scheduler_ptr->reconnect();
+//        });
+        connection_ptr->handle_reconnection_.connect([scheduler_ptr](){
+            scheduler_ptr->reconnect();
+        });
 //        // Setting callback to handle process signals
 //        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
 //        // Start an asynchronous wait for one of the signals to occur.
@@ -132,22 +139,22 @@ int main(int argc, char const *const argv[]) {
         // Starting login procedure
         if (!scheduler_ptr->login()) {
             std::cerr << "Authentication failed" << std::endl;
-            return EXIT_FAILURE;
+            std::exit(EXIT_FAILURE);
         }
         // Starting specified directory local file watching
         fw.start();
     }
     catch (fs::filesystem_error &e) {
         std::cerr << "Filesystem error from " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::exit(EXIT_FAILURE);
     }
     catch (boost::system::system_error &e) {
         std::cerr << "System error with code " << e.code() << ": " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::exit(EXIT_FAILURE);
     }
     catch (std::exception &e) {
         std::cerr << "Error: " << e.what() << std::endl;
-        return EXIT_FAILURE;
+        std::exit(EXIT_FAILURE);
     }
-    return EXIT_SUCCESS;
+    std::exit(EXIT_SUCCESS);
 }

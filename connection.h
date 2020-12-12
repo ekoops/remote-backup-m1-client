@@ -1,4 +1,3 @@
-class scheduler;
 #ifndef REMOTE_BACKUP_M1_CLIENT_CONNECTION_H
 #define REMOTE_BACKUP_M1_CLIENT_CONNECTION_H
 
@@ -10,10 +9,11 @@ class scheduler;
 #include <boost/asio/ssl.hpp>
 #include <boost/regex.hpp>
 #include <mutex>
+#include <boost/logic/tribool.hpp>
 #include "f_message.h"
 #include "message.h"
 #include "user.h"
-#include "scheduler.h"
+#include <boost/signals2.hpp>
 
 class connection {
     // needed for isolated completion handler execution
@@ -25,10 +25,12 @@ class connection {
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
     boost::asio::steady_timer keepalive_timer_;
-    std::weak_ptr<scheduler> scheduler_ptr_;
-    user user_;
-
 public:
+    boost::signals2::signal<void()> handle_reconnection_;
+    void set_reconnection_handler(std::function<void(void)> const&cb) {
+        this->handle_reconnection_.connect(cb);
+    }
+
     static std::shared_ptr<connection> get_instance(
             boost::asio::io_context &io,
             boost::asio::ssl::context &ctx,
@@ -40,31 +42,34 @@ public:
     void connect();
 
     void schedule_keepalive();
+
     void cancel_keepalive();
 
-        std::optional<communication::message> sync_post(communication::message const &request_msg);
+    std::pair<boost::logic::tribool, std::optional<communication::message>>
+    sync_post(communication::message const &request_msg);
 
-    void post(communication::message const &request_msg,
-              std::function<void(std::optional<communication::message> const &)> const &fn);
+    void post(
+            communication::message const &request_msg,
+            std::function<void(std::optional<communication::message> const &)> const &fn
+    );
 
-    void post(std::shared_ptr<communication::f_message> const &request_msg,
-              std::function<void(std::optional<communication::message> const &)> const &fn);
+    void post(
+            std::shared_ptr<communication::f_message> const &request_msg,
+            std::function<void(std::optional<communication::message> const &)> const &fn
+    );
 
     void close();
 
-    void set_scheduler(const std::shared_ptr<scheduler> &scheduler_ptr);
-    void set_user(user usr);
-
-        private:
+private:
     connection(
             boost::asio::io_context &io,
             boost::asio::ssl::context &ctx,
             size_t thread_pool_size
     );
 
-    bool write(communication::message const &request_msg);
+    boost::logic::tribool write(communication::message const &request_msg);
 
-    std::optional<communication::message> read();
+    std::pair<boost::logic::tribool, std::optional<communication::message>> read();
 
 };
 

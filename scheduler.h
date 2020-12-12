@@ -1,10 +1,10 @@
-class connection;
 #ifndef REMOTE_BACKUP_M1_CLIENT_SCHEDULER_H
 #define REMOTE_BACKUP_M1_CLIENT_SCHEDULER_H
 
 #include <boost/filesystem.hpp>
 #include "connection.h"
 #include "dir.h"
+#include "user.h"
 
 /*
  * This class allows to schedule operation based
@@ -18,6 +18,7 @@ class scheduler {
     // prevent io_context object's run() call from returning when there is no more work to do
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
+    user user_;
 
     scheduler(
             boost::asio::io_context &io,
@@ -26,17 +27,23 @@ class scheduler {
             size_t thread_pool_size
     );
 
-    void handle_create(boost::filesystem::path const &relative_path,
-                       std::string const &sign,
-                       std::optional<communication::message> const &response);
+    void handle_create(
+            boost::filesystem::path const &relative_path,
+            std::string const &sign,
+            std::optional<communication::message> const &response
+    );
 
-    void handle_update(boost::filesystem::path const &relative_path,
-                       std::string const &sign,
-                       std::optional<communication::message> const &response);
+    void handle_update(
+            boost::filesystem::path const &relative_path,
+            std::string const &sign,
+            std::optional<communication::message> const &response
+    );
 
-    void handle_erase(boost::filesystem::path const &relative_path,
-                      std::string const &sign,
-                      std::optional<communication::message> const &response);
+    void handle_erase(
+            boost::filesystem::path const &relative_path,
+            std::string const &sign,
+            std::optional<communication::message> const &response
+    );
 
 public:
     static std::shared_ptr<scheduler> get_instance(
@@ -45,6 +52,12 @@ public:
             std::shared_ptr<connection> connection_ptr,
             size_t thread_pool_size
     );
+
+    void cancel_keepalive();
+
+    void schedule_keepalive();
+
+    void reconnect();
 
     bool login();
 
