@@ -75,7 +75,7 @@ resource &resource::digest(std::string digest) {
 *
 * @return the digest field value
 */
-[[nodiscard]] std::string resource::digest() const {
+[[nodiscard]] std::string const& resource::digest() const {
     return this->digest_;
 }
 

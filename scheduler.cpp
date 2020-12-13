@@ -285,17 +285,18 @@ void scheduler::sync() {
             std::string s_sign{s_view.cbegin(), s_view.cend()};
             auto splitted_sign = tools::split_sign(s_sign);
             fs::path const &relative_path = splitted_sign.first;
-            std::string digest = splitted_sign.second;
+            std::string s_digest = splitted_sign.second;
             s_dir_ptr->insert_or_assign(relative_path, directory::resource{
                     boost::indeterminate, // unused field for server dir
                     true,   // unused field for server dir
-                    digest
+                    s_digest
             });
             if (!this->dir_ptr_->contains(relative_path)) {
-                this->erase(relative_path, digest);
+                this->erase(relative_path, s_digest);
             } else {
                 auto rsrc = this->dir_ptr_->rsrc(relative_path).value();
-                if (rsrc.digest() != digest) this->update(relative_path, digest);
+                std::string const& c_digest = rsrc.digest();
+                if (rsrc.digest() != s_digest) this->update(relative_path, c_digest);
                 else this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(true).exist_on_server(true));
             }
         }

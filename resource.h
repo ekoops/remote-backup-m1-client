@@ -41,7 +41,7 @@ namespace directory {
 
         resource& digest(std::string digest);
 
-        [[nodiscard]] std::string digest() const;
+        [[nodiscard]] std::string const& digest() const;
     };
     // TODO cancellare l'operazione di redirezione
     std::ostream& operator<<(std::ostream& os, directory::resource const& rsrc);
