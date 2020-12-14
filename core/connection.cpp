@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <utility>
 #include "connection.h"
-#include "f_message.h"
-#include "tlv_view.h"
+#include "../communication/f_message.h"
+#include "../communication/tlv_view.h"
 
 namespace ssl = boost::asio::ssl;
 
@@ -24,48 +24,13 @@ connection::connection(boost::asio::io_context &io,
     strand_{boost::asio::make_strand(io)},
     socket_{strand_, ctx},
     resolver_{strand_},
-    keepalive_timer_{io, boost::asio::chrono::seconds{30}} {
+    keepalive_timer_{strand_, boost::asio::chrono::seconds{30}} {
+
     this->socket_.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
     this->thread_pool_.reserve(thread_pool_size);
     for (int i = 0; i < thread_pool_size; i++) {
         this->thread_pool_.emplace_back(boost::bind(&boost::asio::io_context::run, &io), std::ref(io));
-    }
-}
-
-void connection::cancel_keepalive() {
-    boost::system::error_code ec;
-    this->keepalive_timer_.cancel(ec);
-}
-
-void connection::schedule_keepalive() {
-    try {
-        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
-        this->keepalive_timer_.async_wait(
-                boost::asio::bind_executor(
-                        this->strand_,
-                        [this](boost::system::error_code const &e) {
-                            if (!e) {
-                                std::cout << "Sending keep alive message..." << std::endl;
-                                communication::message msg{communication::MESSAGE_TYPE::KEEP_ALIVE};
-                                msg.add_TLV(communication::TLV_TYPE::END);
-                                auto result = this->sync_post(msg);
-
-                            }
-                        }
-                ));
-    }
-    catch (boost::system::system_error &e) {
-        std::cerr << "Failed to set keepalive timer" << std::endl;
-    }
-}
-
-void connection::resolve(std::string const &hostname, std::string const &service) {
-    boost::system::error_code ec;
-    this->endpoints_ = this->resolver_.resolve(hostname, service, ec);
-    if (ec) {
-        std::cerr << "Error in resolve():\n\t" << ec.message() << std::endl;
-        std::exit(EXIT_FAILURE);
     }
 }
 
@@ -86,11 +51,63 @@ std::shared_ptr<connection> connection::get_instance(
     return std::shared_ptr<connection>(new connection{io, ctx, thread_pool_size});
 }
 
+
 /**
- * Allow to establish an SSL socket connection with the specified endpoint
+ * Allow to cancel the already scheduled keepalive timer
  *
- * @param hostname the desired endpoint hostname
- * @param service the desired endpoint service/port number
+ * @return void
+ */
+void connection::cancel_keepalive() {
+    boost::system::error_code ec;
+    this->keepalive_timer_.cancel(ec);
+}
+
+/**
+ * Allow to schedule a 30 seconds keepalive timer
+ *
+ * @return void
+ */
+void connection::schedule_keepalive() {
+    try {
+        this->keepalive_timer_.expires_after(boost::asio::chrono::seconds{30});
+        this->keepalive_timer_.async_wait(
+                [this](boost::system::error_code const &e) {
+                    if (!e) {
+                        communication::message msg{communication::MSG_TYPE::KEEP_ALIVE};
+                        msg.add_TLV(communication::TLV_TYPE::END);
+                        auto result = this->sync_post(msg);
+                    } else if (e != boost::asio::error::operation_aborted) {
+                        return schedule_keepalive();
+                    }
+                }
+        );
+    }
+    catch (boost::system::system_error &e) {
+        std::cerr << "Failed to set keepalive timer" << std::endl;
+    }
+}
+
+/**
+ * Allow to obtain the available endpoints for a given hostname and service
+ *
+ * @param hostname the hostname that has to be resolved
+ * @param service the service that has to be resolved
+ *
+ * @return void
+ */
+void connection::resolve(std::string const &hostname, std::string const &service) {
+    boost::system::error_code ec;
+    this->endpoints_ = this->resolver_.resolve(hostname, service, ec);
+    if (ec) {
+        std::cerr << "Error in resolve():\n\t" << ec.message() << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+/**
+ * Allow to establish an SSL socket connection for the first available already
+ * resolved endpoint
+ *
  * @return void
  */
 void connection::connect() {
@@ -110,7 +127,14 @@ void connection::connect() {
     if (hec) std::exit(EXIT_FAILURE);
 }
 
-
+/**
+ * Handle the sending and receiving procedures for a specific request message
+ *
+ * @param request_msg the message that has to be sent
+ * @return an std::pair containing the following two values:
+ * @return - a boost::logic::tribool value which indicates if the communication was successful or not
+ * @return - std::optional containing a communication::message if the boost::logic::tribool is true, std::nullopt otherwise
+ */
 std::pair<boost::logic::tribool, std::optional<communication::message>> connection::sync_post(
         communication::message const &request_msg
 ) {
@@ -121,14 +145,15 @@ std::pair<boost::logic::tribool, std::optional<communication::message>> connecti
 }
 
 /**
- * Allow to send a message and handle server response using
- * a specified callback.
+ * Handle the sending and receiving procedures for a specific request message
+ * using the internal thread pool. A provided callback will be executed
+ * on completion
  *
- * @param request_msg message that has to be sent
- * @param fn callback for handling server response
+ * @param request_msg the message that has to be sent
+ * @param fn the callback that has to be executed on completion
  * @return void
  */
-void connection::post(
+void connection::async_post(
         communication::message const &request_msg,
         std::function<void(std::optional<communication::message> const &)> const &fn
 ) {
@@ -148,15 +173,16 @@ void connection::post(
 }
 
 /**
- * Allow to send an f_message through different sequential
- * message to server and handle server response using
- * a specified callback.
+ * Handle the sending and receiving procedures for a specific f_message
+ * using the internal thread pool. The entire f_message is sent
+ * through different sequential message to server.
+ * A provided callback will be executed on completion
  *
  * @param request_msg f_message that has to be sent
- * @param fn callback for handling server response
+ * @param fn the callback that has to be executed on completion
  * @return void
  */
-void connection::post(
+void connection::async_post(
         std::shared_ptr<communication::f_message> const &request_msg,
         std::function<void(std::optional<communication::message> const &)> const &fn
 ) {
@@ -185,14 +211,17 @@ void connection::post(
 }
 
 /**
- * Allow to send a message to server.
+ * Allow to send a message to the server.
  *
  * @param request_msg message that has to be sent
- * @return true if the message has been written successfully, false otherwise
+ * @return true if the message has been successfully sent, false if there has been
+ * an error and boost::indeterminate if the connection has been closed
+ * // (true, std::optional<message>)
+// (false, std::nullopt)
+// (indeterminate, std::nullopt) // failed connection
  */
 boost::logic::tribool connection::write(communication::message const &request_msg) {
     this->keepalive_timer_.cancel();
-    std::cout << "START WRITE" << std::endl;
     size_t header = request_msg.raw_msg_ptr()->size();
     std::vector<boost::asio::mutable_buffer> buffers;
     buffers.emplace_back(boost::asio::buffer(&header, sizeof(header)));
@@ -210,7 +239,7 @@ boost::logic::tribool connection::write(communication::message const &request_ms
         if (error_code == boost::asio::error::eof ||
             error_code == boost::asio::error::connection_reset ||
             error_code == boost::asio::error::broken_pipe) {
-            std::cerr << "WRITE: Connection to the server has been lost. Trying to reconnect..." << std::endl;
+            std::cerr << "Connection to the server has been lost. Trying to reconnect..." << std::endl;
             return boost::indeterminate; // indicate failed connection
         }
         return false;
@@ -225,19 +254,17 @@ boost::logic::tribool connection::write(communication::message const &request_ms
 /**
  * Allow to read a message from server.
  *
- * @return an std::optional<communication::message> if a message has been read successfully,
- * true if the message has been written successfully, std::nullopt otherwise
+ * @return an std::pair containing the following two values:
+ * @return - a boost::logic::tribool value which indicates if the message has been successfully read (true),
+ * if the read operation has been failed (false) or if the connection has been closed (boost::indeterminate)
+ * @return - std::optional containing a communication::message if the boost::logic::tribool is true, std::nullopt otherwise
  */
-// (true, std::optional<message>)
-// (false, std::nullopt)
-// (indeterminate, std::nullopt) // failed connection
 std::pair<boost::logic::tribool, std::optional<communication::message>> connection::read() {
-    std::cout << "START READ" << std::endl;
     size_t header = 0;
     auto raw_msg_ptr = std::make_shared<std::vector<uint8_t>>();
     auto insert_pos = raw_msg_ptr->begin();
     bool ended = false;
-    communication::MESSAGE_TYPE msg_type;
+    communication::MSG_TYPE msg_type;
     bool first = true;
     try {
         this->keepalive_timer_.cancel();
@@ -268,7 +295,7 @@ std::pair<boost::logic::tribool, std::optional<communication::message>> connecti
         if (error_code == boost::asio::error::eof ||
             error_code == boost::asio::error::connection_reset ||
             error_code == boost::asio::error::broken_pipe) {
-            std::cerr << "READ: Connection to the server has been lost. Trying to reconnect..." << std::endl;
+            std::cerr << "Connection to the server has been lost. Trying to reconnect..." << std::endl;
             return {boost::indeterminate, std::nullopt};
         }
         return {false, std::nullopt};
@@ -281,30 +308,20 @@ std::pair<boost::logic::tribool, std::optional<communication::message>> connecti
 }
 
 /**
- * Allow to gracefully close server connection and
- * shutdown all connection's threads.
+ * Allow to set the reconnection handler
+ *
+ * @param fn the handler for reconnection management
+ * @return void
+ */
+void connection::set_reconnection_handler(std::function<void(void)> const&fn) {
+    this->handle_reconnection_.connect(fn);
+}
+
+/**
+ * Allow to join the connection threads.
  *
  * @return void
  */
-void connection::close() {
-    try {
-        // Waiting until threads ends the execution
-        // of completion handlers
-        for (auto &t : this->thread_pool_) if (t.joinable()) t.join();
-
-        // Sending close_notify SSL message
-        this->socket_.shutdown();
-        // Sending FIN message
-        this->socket_.lowest_layer().shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-        // Close the socket
-        this->socket_.lowest_layer().close();
-    }
-    catch (boost::system::system_error &ex) {
-        std::cerr << "Failed to gracefully close connection: " << ex.what() << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-    catch (std::exception &ex) {
-        std::cerr << "Error in close():\n\t" << ex.what() << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+void connection::join_threads() {
+    for (auto &t : this->thread_pool_) if (t.joinable()) t.join();
 }

@@ -36,6 +36,11 @@ bool tlv_view::next_tlv() {
     return true;
 }
 
+/**
+* Allow to verify if the END TLV tag is present on the handled message
+*
+* @return bool return true if the END TLV tag is present, false otherwise
+*/
 bool tlv_view::verify_end() const {
     auto ptr = this->end_-1;
     for (int i=0; i<4; i++) {
@@ -84,15 +89,18 @@ bool tlv_view::verify_end() const {
     return this->length_;
 }
 
+
 std::vector<uint8_t>::iterator tlv_view::begin() {
     if (!this->valid_) throw std::logic_error{"the tlv_view is not valid"};
     return this->data_begin_;
 }
 
+
 std::vector<uint8_t>::iterator tlv_view::end() {
     if (!this->valid_) throw std::logic_error{"the tlv_view is not valid"};
     return this->data_end_;
 }
+
 
 [[nodiscard]] std::vector<uint8_t>::const_iterator tlv_view::cbegin() const {
     if (!this->valid_) throw std::logic_error{"the tlv_view is not valid"};

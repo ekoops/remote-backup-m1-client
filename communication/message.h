@@ -8,22 +8,17 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/filesystem/fstream.hpp>
 #include <boost/serialization/vector.hpp>
+#include "types.h"
 
 namespace communication {
-    enum MESSAGE_TYPE {
-        NONE, CREATE, UPDATE, ERASE, SYNC, AUTH, KEEP_ALIVE
-    };
-
-    enum TLV_TYPE {
-        USRN, PSWD, ITEM, END, OK, ERROR, CONTENT
-    };
-
-    // This class allows to incrementally create a message
-    // for handle server communication
+    /*
+     * This class allows to incrementally create a message
+     * for handle server communication
+     */
     class message {
         std::shared_ptr<std::vector<uint8_t>> raw_msg_ptr_;
     public:
-        explicit message(MESSAGE_TYPE msg_type = MESSAGE_TYPE::NONE);
+        explicit message(MSG_TYPE msg_type = MSG_TYPE::NONE);
 
         explicit message(std::shared_ptr<std::vector<uint8_t>> raw_msg_ptr);
 
@@ -31,7 +26,7 @@ namespace communication {
 
         [[nodiscard]] std::shared_ptr<std::vector<uint8_t>> raw_msg_ptr() const;
 
-        [[nodiscard]] MESSAGE_TYPE msg_type() const;
+        [[nodiscard]] MSG_TYPE msg_type() const;
 
         [[nodiscard]] boost::asio::mutable_buffer buffer() const;
 

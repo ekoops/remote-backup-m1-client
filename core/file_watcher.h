@@ -9,28 +9,25 @@
 #include <memory>
 #include <sstream>
 #include <mutex>
-#include "dir.h"
+#include "../directory/dir.h"
 #include "scheduler.h"
 
 /**
  * This class allow to create a file_watcher given a specific
  * directory. If a specific resource is not synced, this class
- * uses the associated bind_scheduler to schedule the appropriate
+ * uses the associated scheduler to schedule the appropriate
  * operation.
  */
 class file_watcher {
     std::chrono::milliseconds wait_time_;
     std::shared_ptr<directory::dir> dir_ptr_;
     std::shared_ptr<scheduler> scheduler_ptr_;
-    std::mutex m_;
     bool running_ = true;
 public:
     file_watcher(std::shared_ptr<directory::dir> dir_ptr,
                  std::shared_ptr<scheduler> scheduler_ptr,
                  std::chrono::milliseconds wait_time);
     void start();
-    bool running();
-    void stop();
 };
 
 #endif //PROVA_FILEWATCHER_H

@@ -9,7 +9,7 @@ using namespace directory;
  * @param synced value specifying if client is synced with server on this resource
  * @param exist_on_server value specifying if the client knows that this resource exist on server
  * @param digest the resource digest
- * @return a new constructed connection instance
+ * @return a new constructed resource instance
  */
 resource::resource(
         boost::logic::tribool synced,

@@ -99,3 +99,13 @@ void dir::for_each(std::function<void(std::pair<boost::filesystem::path, directo
     while (it != this->content_.cend()) fn(*it++);
 }
 
+/**
+ * Allows to erase all directory entries
+ *
+ * @return void
+ */
+void dir::clear() {
+    std::unique_lock ul{this->m_, std::defer_lock};
+    if (concurrent_accessed_) ul.lock();
+    this->content_.clear();
+}

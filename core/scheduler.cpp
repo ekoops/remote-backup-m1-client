@@ -1,23 +1,21 @@
 #include <boost/function.hpp>
 #include "scheduler.h"
-#include "tools.h"
-#include "message.h"
-#include "tlv_view.h"
-#include "f_message.h"
+#include "../utilities/tools.h"
+#include "../communication/message.h"
+#include "../communication/tlv_view.h"
+#include "../communication/f_message.h"
 
 namespace fs = boost::filesystem;
 
 /**
- * Construct a bind_scheduler instance for a given watched directory.
- * The bind_scheduler instance will use the connection abstraction
- * to communicate with the server and a thread pool for constructing
- * in parallel multiple request message
+ * Construct a scheduler instance for a given watched directory
+ * and a given connection instance.
  *
  * @param io_context io_context
  * @param dir_ptr the watched directory std::shared_ptr
  * @param connection_ptr the connection std::shared_ptr
  * @param thread_pool_size the thread pool size
- * @return a new constructed bind_scheduler instance
+ * @return a new constructed scheduler instance
  */
 scheduler::scheduler(
         boost::asio::io_context &io,
@@ -39,16 +37,14 @@ scheduler::scheduler(
 }
 
 /**
- * Construct a bind_scheduler instance std::shared_ptr for a given watched directory.
- * The bind_scheduler instance will use the connection abstraction
- * to communicate with the server and a thread pool for constructing
- * in parallel multiple request message
+ * Construct a scheduler instance std::shared_ptr for a given watched directory
+ * and a given connection instance.
  *
  * @param io_context io_context
  * @param dir_ptr the watched directory std::shared_ptr
  * @param connection_ptr the connection std::shared_ptr
  * @param thread_pool_size the thread pool size
- * @return a new constructed bind_scheduler instance std::shared_ptr
+ * @return a new constructed scheduler instance std::shared_ptr
  */
 std::shared_ptr<scheduler> scheduler::get_instance(
         boost::asio::io_context &io,
@@ -64,15 +60,13 @@ std::shared_ptr<scheduler> scheduler::get_instance(
     });
 }
 
-
-/* La riconnessione avviene in due contesti:
- * quando scade quando scade il timer o quando fallisce una write o una read.
- * Visto che anche alla scadenza del timer quello che innesca la
- * riconnessione è una write, si deve fare in modo che il codice che
- * nasconde la write all'interno di connection (post e sync_post)
- * eseguano come callback una funzione di scheduler SEMPRE sul
- * thread in corso di connection.
- * */
+/**
+ * Allow to handle reconnection task sending the
+ * stored user auth information is the user is already
+ * authenticated.
+ *
+ * @return void
+ */
 void scheduler::reconnect() {
     this->connection_ptr_->connect();
     if (this->user_.authenticated()) {
@@ -106,7 +100,7 @@ void scheduler::handle_create(
     }
     communication::message const &response_msg = response.value();
     communication::tlv_view s_view{response_msg};
-    if (response_msg.msg_type() == communication::MESSAGE_TYPE::CREATE &&
+    if (response_msg.msg_type() == communication::MSG_TYPE::CREATE &&
         s_view.next_tlv() &&
         s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
         sign == std::string{s_view.cbegin(), s_view.cend()} &&
@@ -141,7 +135,7 @@ void scheduler::handle_update(
     communication::message const &response_msg = response.value();
     communication::tlv_view s_view{response_msg};
     this->dir_ptr_->insert_or_assign(relative_path, rsrc.synced(
-            response_msg.msg_type() == communication::MESSAGE_TYPE::UPDATE &&
+            response_msg.msg_type() == communication::MSG_TYPE::UPDATE &&
             s_view.next_tlv() &&
             s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
             sign == std::string{s_view.cbegin(), s_view.cend()} &&
@@ -172,7 +166,7 @@ void scheduler::handle_erase(
     }
     communication::message const &response_msg = response.value();
     communication::tlv_view s_view{response_msg};
-    if (response_msg.msg_type() == communication::MESSAGE_TYPE::ERASE &&
+    if (response_msg.msg_type() == communication::MSG_TYPE::ERASE &&
         s_view.next_tlv() &&
         s_view.tlv_type() == communication::TLV_TYPE::ITEM &&
         sign == std::string{s_view.cbegin(), s_view.cend()} &&
@@ -184,6 +178,11 @@ void scheduler::handle_erase(
     }
 }
 
+/**
+ * Allow to start the login procedure
+ *
+ * @return true if the login procedure has been successful, false otherwise
+ */
 bool scheduler::login() {
     std::string username, password;
     boost::regex username_regex{"[a-z][a-z\\d_\\.]{7, 15}"};
@@ -221,7 +220,7 @@ bool scheduler::login() {
 }
 
 /**
- * Allow to try to authenticate client user
+ * Allow to try to authenticate a given user.
  *
  * @param username the client user username
  * @param password the client user password
@@ -230,7 +229,7 @@ bool scheduler::login() {
 bool scheduler::auth(user &usr) {
     std::string const &username = usr.username();
     std::string const &password = usr.password();
-    communication::message auth_msg{communication::MESSAGE_TYPE::AUTH};
+    communication::message auth_msg{communication::MSG_TYPE::AUTH};
     auth_msg.add_TLV(communication::TLV_TYPE::USRN, username.size(), username.c_str());
     auth_msg.add_TLV(communication::TLV_TYPE::PSWD, password.size(), password.c_str());
     auth_msg.add_TLV(communication::TLV_TYPE::END);
@@ -252,12 +251,12 @@ bool scheduler::auth(user &usr) {
 }
 
 /**
- * Allow to schedule a SYNC operation through the associated connection
+ * Allow to handle a SYNC operation.
  *
  * @return void
  */
 void scheduler::sync() {
-    communication::message request_msg{communication::MESSAGE_TYPE::SYNC};
+    communication::message request_msg{communication::MSG_TYPE::SYNC};
     request_msg.add_TLV(communication::TLV_TYPE::END);
     std::cout << "Scheduling SYNC..." << std::endl;
 
@@ -269,8 +268,8 @@ void scheduler::sync() {
     auto response_msg = response.second.value();
 
     communication::tlv_view s_view{response_msg};
-    communication::MESSAGE_TYPE s_msg_type = response_msg.msg_type();
-    if (s_msg_type != communication::MESSAGE_TYPE::SYNC ||
+    communication::MSG_TYPE s_msg_type = response_msg.msg_type();
+    if (s_msg_type != communication::MSG_TYPE::SYNC ||
         !s_view.next_tlv() ||
         s_view.tlv_type() == communication::TLV_TYPE::ERROR) {
         std::cerr << "Failed to sync server state" << std::endl;
@@ -332,12 +331,12 @@ void scheduler::create(fs::path const &relative_path, std::string const &digest)
 
         std::string sign = tools::create_sign(relative_path, digest);
         auto f_msg = communication::f_message::get_instance(
-                communication::MESSAGE_TYPE::CREATE,
+                communication::MSG_TYPE::CREATE,
                 this->dir_ptr_->path() / relative_path,
                 sign
         );
 
-        this->connection_ptr_->post(
+        this->connection_ptr_->async_post(
                 f_msg,
                 boost::asio::bind_executor(
                         this->io_,
@@ -375,12 +374,12 @@ void scheduler::update(fs::path const &relative_path, std::string const &digest)
 
         std::string sign = tools::create_sign(relative_path, digest);
         auto f_msg = communication::f_message::get_instance(
-                communication::MESSAGE_TYPE::UPDATE,
+                communication::MSG_TYPE::UPDATE,
                 this->dir_ptr_->path() / relative_path,
                 sign
         );
 
-        this->connection_ptr_->post(
+        this->connection_ptr_->async_post(
                 f_msg,
                 boost::asio::bind_executor(
                         this->io_,
@@ -417,10 +416,10 @@ void scheduler::erase(fs::path const &relative_path, std::string const &digest) 
         this->dir_ptr_->insert_or_assign(relative_path, rsrc);
 
         std::string sign = tools::create_sign(relative_path, digest);
-        communication::message request_msg{communication::MESSAGE_TYPE::ERASE};
+        communication::message request_msg{communication::MSG_TYPE::ERASE};
         request_msg.add_TLV(communication::TLV_TYPE::ITEM, sign.size(), sign.c_str());
         request_msg.add_TLV(communication::TLV_TYPE::END);
-        this->connection_ptr_->post(
+        this->connection_ptr_->async_post(
                 request_msg,
                 boost::asio::bind_executor(
                         this->io_,
@@ -436,6 +435,11 @@ void scheduler::erase(fs::path const &relative_path, std::string const &digest) 
     });
 }
 
-void scheduler::close() {
+/**
+ * Allow to join the scheduler threads.
+ *
+ * @return void
+ */
+void scheduler::join_threads() {
     for (auto &t : this->thread_pool_) if (t.joinable()) t.join();
 }

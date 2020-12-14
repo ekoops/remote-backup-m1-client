@@ -1,16 +1,16 @@
 #include <utility>
 #include "file_watcher.h"
-#include "resource.h"
-#include "tools.h"
+#include "../directory/resource.h"
+#include "../utilities/tools.h"
 
 namespace fs = boost::filesystem;
 
 /**
  * Construct a file_watcher instance with the associated watched directory
- * and a bind_scheduler for server update scheduling
+ * and a scheduler for server update scheduling.
  *
  * @param dir_ptr std::shared_ptr to the watched directory
- * @param scheduler_ptr std::shared_ptr to an operation bind_scheduler
+ * @param scheduler_ptr std::shared_ptr to an operation scheduler
  * @param wait_time file_watcher refresh rate in milliseconds
  * @return a new constructed file_watcher instance
  */
@@ -26,7 +26,7 @@ file_watcher::file_watcher(std::shared_ptr<directory::dir> dir_ptr,
             this->dir_ptr_->insert_or_assign(relative_path, directory::resource{
                     boost::indeterminate,
                     false,
-                    tools::hash(absolute_path, relative_path)
+                    tools::MD5_hash(absolute_path, relative_path)
             });
         }
     }
@@ -44,7 +44,7 @@ void file_watcher::start() {
 
     this->scheduler_ptr_->sync();
 
-    while (this->running()) {
+    while (this->running_) {
         std::this_thread::sleep_for(this->wait_time_);
 
         this->dir_ptr_->for_each([&root, this](std::pair<fs::path, directory::resource> const &pair) {
@@ -65,7 +65,7 @@ void file_watcher::start() {
             fs::path const &absolute_path = file.path();
             if (fs::is_regular_file(absolute_path)) {
                 fs::path relative_path{absolute_path.generic_path().string().substr(watched_dir_length)};
-                std::string digest = tools::hash(absolute_path, relative_path);
+                std::string digest = tools::MD5_hash(absolute_path, relative_path);
 
                 // if doesn't exists
                 if (!this->dir_ptr_->contains(relative_path)) {
@@ -86,25 +86,4 @@ void file_watcher::start() {
             }
         }
     }
-}
-
-/**
- * Allow to get the running flag value
- *
- * @return the running flag value
- */
-bool file_watcher::running() {
-    std::unique_lock ul {this->m_};
-    return this->running_;
-}
-
-/**
- * Signal file_watcher to stop. This call is not
- * blocking.
- *
- * @return void
- */
-void file_watcher::stop() {
-    std::unique_lock ul {this->m_};
-    this->running_ = false;
 }

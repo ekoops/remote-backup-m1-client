@@ -1,5 +1,4 @@
 #include "tools.h"
-#include "message.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/asio.hpp>
 
@@ -66,7 +65,7 @@ std::pair<bool, std::vector<std::string>> tools::match_and_parse(boost::regex co
 * @param relative_path the relative path location that has to be included in digest computation
 * @return a string representation of file MD5 digest
 */
-std::string tools::hash(fs::path const &absolute_path, fs::path const &relative_path) {
+std::string tools::MD5_hash(fs::path const &absolute_path, fs::path const &relative_path) {
     fs::ifstream ifs;
     ifs.open(absolute_path, std::ios_base::binary);
     ifs.unsetf(std::ios::skipws);

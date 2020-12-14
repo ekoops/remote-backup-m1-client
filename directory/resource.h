@@ -13,15 +13,17 @@
  *      indeterminate:    waiting for server response or not already processed server response
  *
  * exist_on_server:
- *      true:           the client knows that the resource exist on server
+ *      true:           the client knows that the resource exists on server
  *      false:          the client knows that the resource doesn't exist on server
  *
  * digest: digest value of resource
  */
 
 namespace directory {
-    // This class represent details about a directory object with respect to the client vision
-    // of the resource state on server
+    /*
+     * This class represent details about a directory object with respect to the client vision
+     * of the resource state on server
+     */
     class resource {
         boost::logic::tribool synced_;
         bool exist_on_server_;

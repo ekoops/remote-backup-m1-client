@@ -11,7 +11,7 @@ using namespace communication;
  * @param msg_type the message type
  * @return a new constructed message instance
  */
-message::message(MESSAGE_TYPE msg_type) : raw_msg_ptr_{std::make_shared<std::vector<uint8_t>>()} {
+message::message(MSG_TYPE msg_type) : raw_msg_ptr_{std::make_shared<std::vector<uint8_t>>()} {
     this->raw_msg_ptr_->push_back(static_cast<uint8_t>(msg_type));
 }
 
@@ -56,8 +56,8 @@ std::shared_ptr<std::vector<uint8_t>> message::raw_msg_ptr() const {
 *
 * @return the message type
 */
-MESSAGE_TYPE message::msg_type() const {
-    return static_cast<MESSAGE_TYPE>((*this->raw_msg_ptr_)[0]);
+MSG_TYPE message::msg_type() const {
+    return static_cast<MSG_TYPE>((*this->raw_msg_ptr_)[0]);
 }
 
 /**

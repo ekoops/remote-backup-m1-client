@@ -14,9 +14,11 @@ size_t const f_message::CHUNK_SIZE = 4096;
  * @param path the file sign
  * @return a new constructed f_message instance
  */
-f_message::f_message(MESSAGE_TYPE msg_type,
-                     fs::path const &path,
-                     std::string const &sign) // the sign is added to improve performance
+f_message::f_message(
+        MSG_TYPE msg_type,
+        fs::path const &path,
+        std::string const &sign
+) // the sign is added to improve performance
         : message{msg_type}, ifs_{path, std::ios_base::binary}, completed_{false} {
     this->ifs_.unsetf(std::ios::skipws);
     this->ifs_.seekg(0, std::ios::end);
@@ -39,7 +41,7 @@ f_message::f_message(MESSAGE_TYPE msg_type,
  * @return a new constructed f_message std::shared_ptr instance
  */
 std::shared_ptr<communication::f_message> f_message::get_instance(
-        MESSAGE_TYPE msg_type,
+        MSG_TYPE msg_type,
         fs::path const &path,
         std::string const &sign
 ) {
@@ -66,7 +68,9 @@ bool f_message::next_chunk() {
         this->f_content_[i] = (to_read >> (3 - i) * 8) & 0xFF;
     }
     this->ifs_.read(reinterpret_cast<char *>(&*(this->f_content_ + 4)), to_read);
-    if (!this->ifs_) throw boost::filesystem::filesystem_error::runtime_error {"Unexpected EOF"};
+    if (!this->ifs_) {
+        throw boost::filesystem::filesystem_error::runtime_error{"Unexpected EOF"};
+    }
 
     if (this->completed_) {
         this->resize(this->header_size_ + 5 + this->remaining_);

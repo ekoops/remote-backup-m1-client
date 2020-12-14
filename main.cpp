@@ -1,28 +1,13 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
-#include <boost/bind/bind.hpp>
-#include "file_watcher.h"
-#include "message.h"
-#include "connection.h"
+#include "core/file_watcher.h"
+#include "communication/message.h"
+#include "core/connection.h"
 
 namespace fs = boost::filesystem;
 namespace po = boost::program_options;
 
-
-//void terminate(
-//        boost::asio::io_context &io,
-//        file_watcher &fw,
-//        std::shared_ptr<scheduler> const &scheduler_ptr,
-//        std::shared_ptr<connection> const &connection_ptr
-//) {
-//    std::cout << "Terminating..." << std::endl;
-////    io.stop();
-////    fw.stop();
-////    scheduler_ptr->close();
-////    connection_ptr->close();
-//    std::cout << "SCIACCA" << std::endl;
-//}
 
 po::variables_map parse_options(int argc, char const *const argv[]) {
     try {
@@ -57,7 +42,6 @@ po::variables_map parse_options(int argc, char const *const argv[]) {
 
         po::notify(vm);
 
-
         // canonical returns the absolute path resolving symbolic link, dot and dot-dot
         // it also checks the existence
         vm.at("path-to-watch").value() = fs::canonical(vm["path-to-watch"].as<fs::path>());
@@ -71,8 +55,6 @@ po::variables_map parse_options(int argc, char const *const argv[]) {
             std::cout << "--path-to-watch option set to default value: "
                       << watched_dir_path.generic_path().string() << std::endl;
         }
-
-
         if (vm["threads"].defaulted()) {
             std::cout << "--threads option set to default value: "
                       << vm["threads"].as<size_t>() << std::endl;
@@ -115,24 +97,11 @@ int main(int argc, char const *const argv[]) {
         // Constructing an abstraction for monitoring the filesystem and scheduling
         // server synchronizations through bind_scheduler
         file_watcher fw{watched_dir_ptr, scheduler_ptr, std::chrono::milliseconds{delay}};
-//
-//        connection_ptr->set_reconnection_handler([scheduler_ptr](){
-////            boost::bind(&scheduler::reconnect, *scheduler_ptr));
-//            scheduler_ptr->reconnect();
-//        });
-        connection_ptr->handle_reconnection_.connect([scheduler_ptr](){
+
+        connection_ptr->set_reconnection_handler([scheduler_ptr](){
             scheduler_ptr->reconnect();
         });
-//        // Setting callback to handle process signals
-//        boost::asio::signal_set signals(io_context, SIGINT, SIGTERM);
-//        // Start an asynchronous wait for one of the signals to occur.
-//        signals.async_wait(boost::bind(
-//                &terminate,
-//                boost::ref(io_context),
-//                boost::ref(fw),
-//                boost::cref(scheduler_ptr),
-//                boost::cref(connection_ptr)
-//        ));
+
         // Performing server connection
         connection_ptr->resolve(hostname, service);
         connection_ptr->connect();
@@ -143,6 +112,9 @@ int main(int argc, char const *const argv[]) {
         }
         // Starting specified directory local file watching
         fw.start();
+        io_context.stop();
+        scheduler_ptr->join_threads();
+        connection_ptr->join_threads();
     }
     catch (fs::filesystem_error &e) {
         std::cerr << "Filesystem error from " << e.what() << std::endl;

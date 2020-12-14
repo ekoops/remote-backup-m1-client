@@ -3,12 +3,14 @@
 
 #include <boost/filesystem.hpp>
 #include "connection.h"
-#include "dir.h"
+#include "../directory/dir.h"
 #include "user.h"
 
 /*
- * This class allows to schedule operation based
- * on server communication
+ * The scheduler instance will use the connection abstraction
+ * to communicate with the server, and a thread pool for constructing
+ * in parallel multiple request message. It also manages the user information
+ * for reconnection.
  */
 
 class scheduler {
@@ -18,6 +20,7 @@ class scheduler {
     // prevent io_context object's run() call from returning when there is no more work to do
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
+    // user authentication data
     user user_;
 
     scheduler(
@@ -53,10 +56,6 @@ public:
             size_t thread_pool_size
     );
 
-    void cancel_keepalive();
-
-    void schedule_keepalive();
-
     void reconnect();
 
     bool login();
@@ -71,8 +70,7 @@ public:
 
     void erase(boost::filesystem::path const &relative_path, std::string const &digest);
 
-
-    void close();
+    void join_threads();
 };
 
 
