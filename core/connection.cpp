@@ -3,52 +3,51 @@
 #include <algorithm>
 #include <utility>
 #include "connection.h"
-#include "../communication/f_message.h"
 #include "../communication/tlv_view.h"
 
 namespace ssl = boost::asio::ssl;
 
 /**
  * Construct a connection instance with an associated
- * SSL socket and a thread pool to execute related completion handlers.
+ * SSL socket and a thread to execute related completion handlers.
  *
  * @param io io_context object associated with socket operation
  * @param ctx ssl context object, used to specify SSL connection parameters
- * @param thread_pool_size the number of threads inside the thread pool
+ * @param thread_pool_size the number of threads inside the thread
  * @return a new constructed connection instance
  */
-connection::connection(boost::asio::io_context &io,
-                       ssl::context &ctx,
-                       size_t thread_pool_size
+connection::connection(
+        boost::asio::io_context &io,
+        ssl::context &ctx
 ) : ex_work_guard_{boost::asio::make_work_guard(io)},
     strand_{boost::asio::make_strand(io)},
     socket_{strand_, ctx},
     resolver_{strand_},
-    keepalive_timer_{strand_, boost::asio::chrono::seconds{30}} {
+    keepalive_timer_{strand_, boost::asio::chrono::seconds{30}},
+    thread_{boost::bind(&boost::asio::io_context::run, &io), std::ref(io)} {
 
     this->socket_.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
 
-    this->thread_pool_.reserve(thread_pool_size);
-    for (int i = 0; i < thread_pool_size; i++) {
-        this->thread_pool_.emplace_back(boost::bind(&boost::asio::io_context::run, &io), std::ref(io));
-    }
+//    this->thread_pool_.reserve(1);
+//    for (int i = 0; i < 1; i++) {
+//        this->thread_pool_.emplace_back(boost::bind(&boost::asio::io_context::run, &io), std::ref(io));
+//    }
 }
 
 /**
  * Construct a connection instance std::shared_ptr with an associated
- * SSL socket and a thread pool to execute related completion handlers.
+ * SSL socket and a thread to execute related completion handlers.
  *
  * @param io io_context object associated with socket operation
  * @param ctx ssl context object, used to specify SSL connection parameters
- * @param thread_pool_size the number of threads inside the thread pool
+ * @param thread_pool_size the number of threads inside the thread
  * @return a new constructed connection instance std::shared_ptr
  */
 std::shared_ptr<connection> connection::get_instance(
         boost::asio::io_context &io,
-        ssl::context &ctx,
-        size_t thread_pool_size
+        ssl::context &ctx
 ) {
-    return std::shared_ptr<connection>(new connection{io, ctx, thread_pool_size});
+    return std::shared_ptr<connection>(new connection{io, ctx});
 }
 
 
@@ -146,7 +145,7 @@ std::pair<boost::logic::tribool, std::optional<communication::message>> connecti
 
 /**
  * Handle the sending and receiving procedures for a specific request message
- * using the internal thread pool. A provided callback will be executed
+ * using the internal thread. A provided callback will be executed
  * on completion
  *
  * @param request_msg the message that has to be sent
@@ -174,7 +173,7 @@ void connection::async_post(
 
 /**
  * Handle the sending and receiving procedures for a specific f_message
- * using the internal thread pool. The entire f_message is sent
+ * using the internal thread. The entire f_message is sent
  * through different sequential message to server.
  * A provided callback will be executed on completion
  *
@@ -313,15 +312,15 @@ std::pair<boost::logic::tribool, std::optional<communication::message>> connecti
  * @param fn the handler for reconnection management
  * @return void
  */
-void connection::set_reconnection_handler(std::function<void(void)> const&fn) {
+void connection::set_reconnection_handler(std::function<void(void)> const &fn) {
     this->handle_reconnection_.connect(fn);
 }
 
 /**
- * Allow to join the connection threads.
+ * Allow to join the connection thread.
  *
  * @return void
  */
-void connection::join_threads() {
-    for (auto &t : this->thread_pool_) if (t.joinable()) t.join();
+void connection::join_thread() {
+    if (this->thread_.joinable()) this->thread_.join();
 }

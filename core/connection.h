@@ -17,9 +17,9 @@
 
 /*
  * This class provides an abstraction for an SSL socket.
- * It allow to communicate with server using the async_post methods
- * managing asynchronous calls using the internal strand
- * and the internal thread pool. It also handles keepalive
+ * It allow to communicate with server using the sync_post
+ * and the async_post methods. It manages asynchronous
+ * calls using the internal strand and the internal thread. It also handles keepalive
  * and reconnection features.
  */
 class connection {
@@ -31,14 +31,14 @@ class connection {
     // prevent io_context object's run() calls from returning when there is no more work to do
     boost::asio::executor_work_guard<boost::asio::io_context::executor_type> ex_work_guard_;
     std::vector<std::thread> thread_pool_;
+    std::thread thread_;
     boost::asio::steady_timer keepalive_timer_;
     boost::signals2::signal<void()> handle_reconnection_;
 public:
 
     static std::shared_ptr<connection> get_instance(
             boost::asio::io_context &io,
-            boost::asio::ssl::context &ctx,
-            size_t thread_pool_size
+            boost::asio::ssl::context &ctx
     );
 
     void resolve(std::string const &hostname, std::string const &service);
@@ -66,13 +66,12 @@ public:
 
     void set_reconnection_handler(std::function<void(void)> const &fn);
 
-    void join_threads();
+    void join_thread();
 
 private:
     connection(
             boost::asio::io_context &io,
-            boost::asio::ssl::context &ctx,
-            size_t thread_pool_size
+            boost::asio::ssl::context &ctx
     );
 
     boost::logic::tribool write(communication::message const &request_msg);

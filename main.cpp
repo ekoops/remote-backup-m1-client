@@ -90,7 +90,7 @@ int main(int argc, char const *const argv[]) {
         boost::asio::ssl::context ctx{boost::asio::ssl::context::sslv23};
         ctx.load_verify_file("../certs/ca.pem");
         // Constructing an abstraction for handling SSL connection task
-        auto connection_ptr = connection::get_instance(io_context, ctx, thread_pool_size);
+        auto connection_ptr = connection::get_instance(io_context, ctx);
         // Constructing an abstraction for scheduling async task and managing communication
         // with server through the connection
         auto scheduler_ptr = scheduler::get_instance(io_context, watched_dir_ptr, connection_ptr, thread_pool_size);
@@ -114,7 +114,7 @@ int main(int argc, char const *const argv[]) {
         fw.start();
         io_context.stop();
         scheduler_ptr->join_threads();
-        connection_ptr->join_threads();
+        connection_ptr->join_thread();
     }
     catch (fs::filesystem_error &e) {
         std::cerr << "Filesystem error from " << e.what() << std::endl;

@@ -1,9 +1,7 @@
 #include <boost/function.hpp>
 #include "scheduler.h"
 #include "../utilities/tools.h"
-#include "../communication/message.h"
 #include "../communication/tlv_view.h"
-#include "../communication/f_message.h"
 
 namespace fs = boost::filesystem;
 
